@@ -1,0 +1,144 @@
+@import "tailwindcss";
+
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
+@import "@fontsource/plus-jakarta-sans/500.css";
+@import "@fontsource/plus-jakarta-sans/600.css";
+@import "@fontsource/plus-jakarta-sans/700.css";
+@import "@fontsource/plus-jakarta-sans/800.css";
+
+@theme {
+  /* ---- Brand color system: white + blue, B2B technology ---- */
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-200: #bfdbfe;
+  --color-brand-300: #93c5fd;
+  --color-brand-400: #5b9bf5;
+  --color-brand-500: #2f6fe4;
+  --color-brand-600: #1d54c9;
+  --color-brand-700: #1941a0;
+  --color-brand-800: #163474;
+  --color-brand-900: #0f2554;
+  --color-brand-950: #0a1938;
+
+  --color-ink-50: #f6f7f9;
+  --color-ink-100: #eceef2;
+  --color-ink-200: #d8dce4;
+  --color-ink-300: #b7bfcc;
+  --color-ink-400: #8b96a8;
+  --color-ink-500: #64708a;
+  --color-ink-600: #4d5870;
+  --color-ink-700: #3b4459;
+  --color-ink-800: #262d3d;
+  --color-ink-900: #161b26;
+  --color-ink-950: #0b0e15;
+
+  --color-accent-cyan: #0891b2;
+  --color-accent-teal: #0d9488;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --shadow-card: 0 1px 2px rgba(15, 37, 84, 0.04), 0 8px 24px -8px rgba(15, 37, 84, 0.10);
+  --shadow-card-hover: 0 4px 12px rgba(15, 37, 84, 0.06), 0 24px 48px -12px rgba(15, 37, 84, 0.18);
+
+  --animate-marquee: marquee 32s linear infinite;
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@keyframes flow-lines {
+  from { background-position: 0 0; }
+  to { background-position: 240px 240px; }
+}
+
+@keyframes drift-a {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(26px, -18px); }
+}
+
+@keyframes drift-b {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(-22px, 20px); }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-white text-ink-800 font-sans antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display text-ink-900;
+    letter-spacing: -0.02em;
+  }
+
+  ::selection {
+    @apply bg-brand-200 text-brand-900;
+  }
+}
+
+@layer utilities {
+  .container-page {
+    @apply mx-auto w-full max-w-[1240px] px-5 sm:px-8 lg:px-10;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, rgba(15, 37, 84, 0.045) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(15, 37, 84, 0.045) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+
+  .bg-dot {
+    background-image: radial-gradient(rgba(15, 37, 84, 0.14) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+
+  /* Subtle animated "data flow" texture for dark hero/CTA panels — reads as
+     fiber/signal traffic rather than a generic particle effect. Kept at very
+     low opacity so it stays in the background, not a foreground effect. */
+  .bg-flow-lines {
+    background-image: repeating-linear-gradient(
+      115deg,
+      rgba(147, 197, 253, 0.07) 0px,
+      rgba(147, 197, 253, 0.07) 1px,
+      transparent 1px,
+      transparent 60px
+    );
+    background-size: 240px 240px;
+    animation: flow-lines 16s linear infinite;
+  }
+
+  .animate-drift-a {
+    animation: drift-a 14s ease-in-out infinite;
+  }
+
+  .animate-drift-b {
+    animation: drift-b 17s ease-in-out infinite;
+  }
+
+  .focus-ring {
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
