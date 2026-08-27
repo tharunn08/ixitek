@@ -71,6 +71,17 @@ export default function Footer() {
           ))}
         </div>
       </div>
+      <div className="dnb-seal">
+  <iframe
+    id="Iframe1"
+    src="https://dunsregistered.dnb.com/SealAuthentication.aspx?Cid=1"
+    width="114"
+    height="97"
+    frameBorder="0"
+    scrolling="no"
+    title="Dun & Bradstreet Registered Business Seal"
+  />
+</div>
 
       <div className="border-t border-white/5">
         <div className="container-page flex flex-col-reverse items-center justify-between gap-3 py-6 text-xs text-ink-500 sm:flex-row">
