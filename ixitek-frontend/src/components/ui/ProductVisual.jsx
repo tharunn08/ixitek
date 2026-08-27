@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Icon } from "../../lib/icons.jsx";
 
-// A designed, icon-driven visual panel standing in for product photography.
-// Keeps a consistent premium B2B look across the catalog instead of stock imagery.
+// Renders real product photography when an `image` path is supplied.
+// Falls back to a designed, icon-driven gradient panel when no image is
+// given, or if the image fails to load (e.g. file not added yet).
 const TONES = [
   "from-brand-600 via-brand-700 to-ink-900",
   "from-ink-900 via-brand-800 to-brand-600",
@@ -11,12 +13,30 @@ const TONES = [
 
 export default function ProductVisual({
   icon = "Boxes",
+  image,
+  alt,
   toneIndex = 0,
   className = "",
   iconClassName = "h-14 w-14",
   interactive = true,
 }) {
+  const [imageFailed, setImageFailed] = useState(false);
   const tone = TONES[toneIndex % TONES.length];
+
+  if (image && !imageFailed) {
+    return (
+      <div className={`relative overflow-hidden bg-ink-100 ${className}`}>
+        <img
+          src={image}
+          alt={alt || ""}
+          onError={() => setImageFailed(true)}
+          className={`h-full w-full object-cover transition-transform duration-500 ${
+            interactive ? "group-hover:scale-105" : ""
+          }`}
+        />
+      </div>
+    );
+  }
 
   return (
     <div

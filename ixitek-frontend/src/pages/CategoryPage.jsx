@@ -40,7 +40,14 @@ export default function CategoryPage() {
             </p>
           </motion.div>
           <Reveal delay={0.15} className="hidden lg:block">
-            <ProductVisual icon={category.icon} toneIndex={catIndex} className="aspect-square w-full rounded-2xl" iconClassName="h-20 w-20" />
+            <ProductVisual
+              icon={category.icon}
+              image={category.image}
+              alt={category.name}
+              toneIndex={catIndex}
+              className="aspect-square w-full rounded-2xl"
+              iconClassName="h-20 w-20"
+            />
           </Reveal>
         </div>
       </section>

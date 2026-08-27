@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import ProductVisual from "../ui/ProductVisual.jsx";
 import { Icon } from "../../lib/icons.jsx";
 
-export default function ProductGallery({ icon, name }) {
+export default function ProductGallery({ icon, name, image }) {
   const [active, setActive] = useState(0);
   const [zoomed, setZoomed] = useState(false);
   const frames = [0, 1, 2];
@@ -13,6 +13,8 @@ export default function ProductGallery({ icon, name }) {
       <div className="group relative overflow-hidden rounded-2xl border border-ink-100">
         <ProductVisual
           icon={icon}
+          image={image}
+          alt={name}
           toneIndex={active}
           className="aspect-[4/3] w-full"
           iconClassName="h-20 w-20"
@@ -26,19 +28,21 @@ export default function ProductGallery({ icon, name }) {
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        {frames.map((f) => (
-          <button
-            key={f}
-            onClick={() => setActive(f)}
-            className={`focus-ring overflow-hidden rounded-lg border-2 transition-colors ${
-              active === f ? "border-brand-500" : "border-transparent hover:border-ink-200"
-            }`}
-          >
-            <ProductVisual icon={icon} toneIndex={f} className="aspect-square w-full" iconClassName="h-8 w-8" />
-          </button>
-        ))}
-      </div>
+      {!image && (
+        <div className="grid grid-cols-3 gap-3">
+          {frames.map((f) => (
+            <button
+              key={f}
+              onClick={() => setActive(f)}
+              className={`focus-ring overflow-hidden rounded-lg border-2 transition-colors ${
+                active === f ? "border-brand-500" : "border-transparent hover:border-ink-200"
+              }`}
+            >
+              <ProductVisual icon={icon} toneIndex={f} className="aspect-square w-full" iconClassName="h-8 w-8" />
+            </button>
+          ))}
+        </div>
+      )}
 
       <AnimatePresence>
         {zoomed && (
@@ -57,7 +61,7 @@ export default function ProductGallery({ icon, name }) {
               onClick={(e) => e.stopPropagation()}
               className="relative w-full max-w-2xl overflow-hidden rounded-2xl"
             >
-              <ProductVisual icon={icon} toneIndex={active} className="aspect-[4/3] w-full" iconClassName="h-28 w-28" interactive={false} />
+              <ProductVisual icon={icon} image={image} alt={name} toneIndex={active} className="aspect-[4/3] w-full" iconClassName="h-28 w-28" interactive={false} />
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink-950/80 to-transparent p-6">
                 <p className="font-display text-lg font-bold text-white">{name}</p>
               </div>

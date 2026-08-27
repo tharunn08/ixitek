@@ -12,7 +12,13 @@ export default function FamilyCard({ family, toneIndex = 0, showCategory = false
       className="group flex h-full flex-col overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-card transition-all duration-300 hover:-translate-y-1.5 hover:border-brand-200 hover:shadow-card-hover"
     >
       <div className="relative">
-        <ProductVisual icon={family.icon} toneIndex={toneIndex} className="h-44 w-full" />
+        <ProductVisual
+          icon={family.icon}
+          image={family.image}
+          alt={family.name}
+          toneIndex={toneIndex}
+          className="h-44 w-full"
+        />
         <div className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-brand-600 opacity-0 shadow-md backdrop-blur transition-all duration-300 group-hover:opacity-100">
           <Icon name="ZoomIn" className="h-4 w-4" />
         </div>

@@ -31,7 +31,14 @@ export default function ProductCategoryGrid() {
                 to={`/products/${cat.slug}`}
                 className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-card transition-all duration-300 hover:-translate-y-1 hover:border-brand-200 hover:shadow-card-hover"
               >
-                <ProductVisual icon={cat.icon} toneIndex={i} className="h-40 w-full" iconClassName="h-10 w-10" />
+                <ProductVisual
+                  icon={cat.icon}
+                  image={cat.image}
+                  alt={cat.name}
+                  toneIndex={i}
+                  className="h-40 w-full"
+                  iconClassName="h-10 w-10"
+                />
                 <div className="flex flex-1 flex-col gap-3 p-6">
                   <span className="text-xs font-semibold uppercase tracking-wide text-brand-600">
                     {cat.stat.value} {cat.stat.label}

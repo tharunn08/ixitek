@@ -7,6 +7,7 @@ export const categories = [
     slug: "fiber-optics",
     name: "Fiber Optics",
     icon: "Cable",
+    image: "/images/categories/fiber-optics.jpg",
     shortDescription:
       "Transceivers, patch cords, connectors, adapters, cables, pigtails & attenuators for high-speed optical networks.",
     heroDescription:
@@ -18,6 +19,7 @@ export const categories = [
     slug: "network-tm",
     name: "Network / T&M",
     icon: "Radar",
+    image: "/images/categories/network-tm.jpg",
     shortDescription:
       "Traffic generation, network components and optical switching for test, measurement and network validation.",
     heroDescription:
@@ -29,6 +31,7 @@ export const categories = [
     slug: "data-centre-infrastructure",
     name: "Data Centre Infrastructure",
     icon: "ServerCog",
+    image: "/images/categories/data-centre-infrastructure.jpg",
     shortDescription:
       "Rack builds, structured cabling, and power distribution for mission-critical facilities.",
     heroDescription:
@@ -40,6 +43,7 @@ export const categories = [
     slug: "enterprise-solutions",
     name: "Enterprise Solutions",
     icon: "Users",
+    image: "/images/categories/enterprise-solutions.jpg",
     shortDescription:
       "IT staff augmentation and technical resourcing to extend your engineering team.",
     heroDescription:
@@ -56,6 +60,7 @@ export const families = [
     categorySlug: "fiber-optics",
     name: "Transceivers & AOC/DAC",
     icon: "Zap",
+    image: "/images/products/transceivers-aoc-dac.jpg",
     shortDescription:
       "Pluggable optical transceivers and active/passive copper cabling for 10G–400G Ethernet fabrics.",
     description:
@@ -86,6 +91,7 @@ export const families = [
     categorySlug: "fiber-optics",
     name: "Fiber Optic Patch Cords",
     icon: "Cable",
+    image: "/images/products/patch-cords.jpg",
     shortDescription:
       "26 single-mode and multi-mode patch cord configurations across FC, LC, SC, ST and APC connectors.",
     description:
@@ -124,6 +130,7 @@ export const families = [
     categorySlug: "fiber-optics",
     name: "Fiber Optic Connectors",
     icon: "Plug",
+    image: "/images/products/connectors.jpg",
     shortDescription:
       "FC, LC, SC and ST connectors in simplex, duplex, single-mode and multi-mode variants.",
     description:
@@ -159,6 +166,7 @@ export const families = [
     categorySlug: "fiber-optics",
     name: "Fiber Optic Adapters",
     icon: "Link2",
+    image: "/images/products/adapters.jpg",
     shortDescription:
       "Coupling adapters across FC, LC, SC and ST formats for patch panels and enclosures.",
     description:
@@ -194,6 +202,7 @@ export const families = [
     categorySlug: "fiber-optics",
     name: "Fiber Optic Cables",
     icon: "Waypoints",
+    image: "/images/products/cables.jpg",
     shortDescription:
       "Simplex, duplex and armored fiber cable in bulk spool lengths for data centre and industrial runs.",
     description:
@@ -225,6 +234,7 @@ export const families = [
     categorySlug: "fiber-optics",
     name: "Fiber Optic Pigtails",
     icon: "GitBranch",
+    image: "/images/products/pigtails.jpg",
     shortDescription:
       "15 single-mode and multi-mode pigtail variants across FC, LC, SC and ST connectors.",
     description:
@@ -265,6 +275,7 @@ export const families = [
     categorySlug: "fiber-optics",
     name: "Fiber Optic Attenuators",
     icon: "SlidersHorizontal",
+    image: "/images/products/attenuators.jpg",
     shortDescription: "Fixed in-line and connector-style attenuators for optical power management.",
     description:
       "Fixed optical attenuators used to control received signal power and protect sensitive optical receivers from overload across single-mode links.",
@@ -290,6 +301,7 @@ export const families = [
     categorySlug: "network-tm",
     name: "Traffic Generators",
     icon: "Activity",
+    image: "/images/products/traffic-generators.jpg",
     shortDescription:
       "L2–L7 network test platforms and impairment/emulation tools for pre-deployment validation.",
     description:
@@ -318,6 +330,7 @@ export const families = [
     categorySlug: "network-tm",
     name: "Network Components & Cables",
     icon: "Network",
+    image: "/images/products/network-components-cables.jpg",
     shortDescription: "Copper and structured cabling components for enterprise LAN infrastructure.",
     description:
       "Structured cabling components — copper patch cables, jack panels and network hardware — that complete the physical layer of enterprise LAN and data centre deployments.",
@@ -341,6 +354,7 @@ export const families = [
     categorySlug: "network-tm",
     name: "Optical Switches",
     icon: "GitCompareArrows",
+    image: "/images/products/optical-switches.jpg",
     shortDescription:
       "Fiber optical switches for automated network path switching, redundancy and test bypass.",
     description:
@@ -367,6 +381,7 @@ export const families = [
     categorySlug: "data-centre-infrastructure",
     name: "Data Center Build Solutions",
     icon: "Building2",
+    image: "/images/products/data-center-build-solutions.jpg",
     shortDescription:
       "End-to-end data centre relocation, cabling, rack & stack, and preventive maintenance services.",
     description:
@@ -398,6 +413,7 @@ export const families = [
     categorySlug: "data-centre-infrastructure",
     name: "Racks",
     icon: "Rows3",
+    image: "/images/products/racks.jpg",
     shortDescription:
       "Server racks, networking racks and cable trays built to industrial data centre standards.",
     description:
@@ -427,6 +443,7 @@ export const families = [
     categorySlug: "data-centre-infrastructure",
     name: "PDUs",
     icon: "PlugZap",
+    image: "/images/products/pdus.jpg",
     shortDescription:
       "Basic, metered, and switched & monitored power distribution units from Raritan, ATEN, Enlogic & APC.",
     description:
@@ -453,6 +470,7 @@ export const families = [
     categorySlug: "enterprise-solutions",
     name: "IT Staff Augmentation",
     icon: "UsersRound",
+    image: "/images/products/it-staff-augmentation.jpg",
     shortDescription:
       "Hire vetted technical talent globally and manage them directly — scalable from one seat to a full team.",
     description:

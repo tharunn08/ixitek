@@ -52,7 +52,7 @@ export default function ProductDetail() {
       <section className="py-14 sm:py-16">
         <div className="container-page grid grid-cols-1 gap-12 lg:grid-cols-2">
           <Reveal>
-            <ProductGallery icon={family.icon} name={family.name} />
+            <ProductGallery icon={family.icon} name={family.name} image={family.image} />
           </Reveal>
 
           <motion.div
