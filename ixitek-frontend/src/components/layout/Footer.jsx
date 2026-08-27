@@ -1,3 +1,4 @@
+```jsx
 import { Link } from "react-router-dom";
 import { Icon } from "../../lib/icons.jsx";
 import Logo from "../ui/Logo.jsx";
@@ -33,7 +34,11 @@ export default function Footer() {
             Company
           </span>
           {footerLinks.company.map((l) => (
-            <Link key={l.to} to={l.to} className="focus-ring w-fit text-sm text-ink-300 hover:text-white">
+            <Link
+              key={l.to}
+              to={l.to}
+              className="focus-ring w-fit text-sm text-ink-300 hover:text-white"
+            >
               {l.label}
             </Link>
           ))}
@@ -44,7 +49,11 @@ export default function Footer() {
             Solutions
           </span>
           {footerLinks.solutions.map((l) => (
-            <Link key={l.to} to={l.to} className="focus-ring w-fit text-sm text-ink-300 hover:text-white">
+            <Link
+              key={l.to}
+              to={l.to}
+              className="focus-ring w-fit text-sm text-ink-300 hover:text-white"
+            >
               {l.label}
             </Link>
           ))}
@@ -54,13 +63,24 @@ export default function Footer() {
           <span className="font-display text-xs font-bold uppercase tracking-[0.14em] text-ink-400">
             Our Offices
           </span>
-          <a href={`mailto:${company.email}`} className="focus-ring flex items-center gap-2.5 text-sm text-ink-300 hover:text-white">
+
+          <a
+            href={`mailto:${company.email}`}
+            className="focus-ring flex items-center gap-2.5 text-sm text-ink-300 hover:text-white"
+          >
             <Icon name="Mail" className="h-4 w-4 text-brand-400" />
             {company.email}
           </a>
+
           {company.offices.map((office) => (
-            <div key={office.id} className="flex items-start gap-2.5 text-sm text-ink-300">
-              <Icon name="MapPin" className="mt-0.5 h-4 w-4 shrink-0 text-brand-400" />
+            <div
+              key={office.id}
+              className="flex items-start gap-2.5 text-sm text-ink-300"
+            >
+              <Icon
+                name="MapPin"
+                className="mt-0.5 h-4 w-4 shrink-0 text-brand-400"
+              />
               <span>
                 <span className="block text-xs font-semibold uppercase tracking-wide text-ink-200">
                   {office.label}
@@ -71,13 +91,34 @@ export default function Footer() {
           ))}
         </div>
       </div>
-     
+
       <div className="border-t border-white/5">
-        <div className="container-page flex flex-col-reverse items-center justify-between gap-3 py-6 text-xs text-ink-500 sm:flex-row">
-          <span>&copy; {year} {company.legalNameIN}. All rights reserved.</span>
-          <span>D-U-N-S&reg; {company.duns} &middot; Bangalore, IN &amp; Sacramento, US</span>
+        <div className="container-page flex flex-col items-center justify-between gap-5 py-6 text-xs text-ink-500 sm:flex-row">
+          
+          <div className="flex flex-col gap-2">
+            <span>
+              &copy; {year} {company.legalNameIN}. All rights reserved.
+            </span>
+            <span>
+              D-U-N-S&reg; {company.duns} &middot; Bangalore, IN &amp; Sacramento, US
+            </span>
+          </div>
+
+          <div className="dnb-seal flex shrink-0 items-center justify-center">
+            <iframe
+              id="Iframe1"
+              src="https://dunsregistered.dnb.com/SealAuthentication.aspx?Cid=1"
+              width="114"
+              height="97"
+              frameBorder="0"
+              scrolling="no"
+              title="Dun & Bradstreet Registered Business Seal"
+            />
+          </div>
+
         </div>
       </div>
     </footer>
   );
 }
+```
