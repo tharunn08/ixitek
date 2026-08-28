@@ -17,19 +17,19 @@ export default function FamilyCard({ family, toneIndex = 0, showCategory = false
           image={family.image}
           alt={family.name}
           toneIndex={toneIndex}
-          className="h-44 w-full"
+          className="h-64 w-full"
         />
         <div className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-brand-600 opacity-0 shadow-md backdrop-blur transition-all duration-300 group-hover:opacity-100">
           <Icon name="ZoomIn" className="h-4 w-4" />
         </div>
       </div>
-      <div className="flex flex-1 flex-col gap-3 p-6">
+      <div className="flex flex-1 flex-col gap-3 p-7">
         {category && (
           <span className="text-[0.68rem] font-semibold uppercase tracking-wide text-brand-600">
             {category.name}
           </span>
         )}
-        <h3 className="font-display text-base font-bold text-ink-900">{family.name}</h3>
+        <h3 className="font-display text-lg font-bold text-ink-900">{family.name}</h3>
         <p className="flex-1 text-sm leading-relaxed text-ink-500">{family.shortDescription}</p>
         <div className="flex items-center justify-between border-t border-ink-100 pt-4">
           <span className="text-xs font-medium text-ink-400">

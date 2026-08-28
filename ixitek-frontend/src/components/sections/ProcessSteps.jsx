@@ -4,7 +4,7 @@ import { company } from "../../data/company.js";
 
 export default function ProcessSteps() {
   return (
-    <section className="py-14 sm:py-16">
+    <section className="py-16 sm:py-20 lg:py-24">
       <div className="container-page">
         <SectionHeading
           eyebrow="How we work"

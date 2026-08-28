@@ -53,7 +53,7 @@ export default function Company() {
         </div>
       </section>
 
-      <section className="py-14 sm:py-16">
+      <section className="py-16 sm:py-20 lg:py-24">
         <div className="container-page grid grid-cols-1 gap-16 lg:grid-cols-2">
           <Reveal className="flex flex-col gap-5">
             <SectionHeading eyebrow="Our story" title="Engineering excellence in data centre solutions" />

@@ -11,7 +11,7 @@ export default function CTASection({
   secondaryTo = "/products",
 }) {
   return (
-    <section className="relative overflow-hidden bg-gradient-to-br from-brand-900 via-[#0f2454] to-brand-950 py-14 sm:py-16">
+    <section className="bg-noise relative overflow-hidden bg-gradient-to-br from-brand-900 via-[#0f2454] to-brand-950 py-16 sm:py-20 lg:py-24">
       <div className="absolute inset-0 bg-grid opacity-[0.06]" />
       <div className="absolute left-1/2 top-0 h-[420px] w-[720px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-500/25 blur-[130px]" />
       <div className="container-page relative flex flex-col items-center gap-6 text-center">

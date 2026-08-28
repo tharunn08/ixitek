@@ -7,7 +7,7 @@ import { categories } from "../../data/products.js";
 
 export default function ProductCategoryGrid() {
   return (
-    <section className="bg-ink-50/40 py-14 sm:py-16">
+    <section className="bg-ink-50/40 py-16 sm:py-20 lg:py-24">
       <div className="container-page">
         <div className="flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-end">
           <SectionHeading
@@ -36,14 +36,14 @@ export default function ProductCategoryGrid() {
                   image={cat.image}
                   alt={cat.name}
                   toneIndex={i}
-                  className="h-40 w-full"
+                  className="h-56 w-full"
                   iconClassName="h-10 w-10"
                 />
-                <div className="flex flex-1 flex-col gap-3 p-6">
+                <div className="flex flex-1 flex-col gap-3 p-7">
                   <span className="text-xs font-semibold uppercase tracking-wide text-brand-600">
                     {cat.stat.value} {cat.stat.label}
                   </span>
-                  <h3 className="font-display text-lg font-bold text-ink-900">{cat.name}</h3>
+                  <h3 className="font-display text-xl font-bold text-ink-900">{cat.name}</h3>
                   <p className="flex-1 text-sm leading-relaxed text-ink-500">{cat.shortDescription}</p>
                   <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600">
                     Explore

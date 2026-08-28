@@ -27,8 +27,13 @@ export default function Header() {
   }, [location.pathname]);
 
   const linkClass = ({ isActive }) =>
-    `focus-ring rounded-md px-1 py-1.5 text-sm font-semibold transition-colors ${
+    `focus-ring group/link relative rounded-md px-1 py-1.5 text-sm font-semibold transition-colors ${
       isActive ? "text-brand-600" : "text-ink-700 hover:text-brand-600"
+    }`;
+
+  const linkUnderline = (isActive) =>
+    `pointer-events-none absolute inset-x-1 -bottom-0.5 h-[2px] rounded-full bg-brand-600 transition-transform duration-300 ease-out ${
+      isActive ? "scale-x-100" : "scale-x-0 group-hover/link:scale-x-100"
     }`;
 
   const isWhoActive = location.pathname === "/company" || location.pathname === "/partners";
@@ -64,12 +69,13 @@ export default function Header() {
             >
               <button
                 onClick={() => setWhoOpen((v) => !v)}
-                className={`focus-ring flex items-center gap-1 rounded-md px-1 py-1.5 text-sm font-semibold transition-colors ${
+                className={`focus-ring group/link relative flex items-center gap-1 rounded-md px-1 py-1.5 text-sm font-semibold transition-colors ${
                   isWhoActive ? "text-brand-600" : "text-ink-700 hover:text-brand-600"
                 }`}
               >
                 Who We Are
                 <Icon name="ChevronDown" className={`h-3.5 w-3.5 transition-transform ${whoOpen ? "rotate-180" : ""}`} />
+                <span className={linkUnderline(isWhoActive)} />
               </button>
               <WhoWeAreMenu open={whoOpen} onClose={() => setWhoOpen(false)} />
             </div>
@@ -79,18 +85,21 @@ export default function Header() {
                 setWhoOpen(false);
               }}
               onClick={() => setMegaOpen((v) => !v)}
-              className={`focus-ring flex items-center gap-1 rounded-md px-1 py-1.5 text-sm font-semibold transition-colors ${
+              className={`focus-ring group/link relative flex items-center gap-1 rounded-md px-1 py-1.5 text-sm font-semibold transition-colors ${
                 location.pathname.startsWith("/products") ? "text-brand-600" : "text-ink-700 hover:text-brand-600"
               }`}
             >
               Products &amp; Solutions
               <Icon name="ChevronDown" className={`h-3.5 w-3.5 transition-transform ${megaOpen ? "rotate-180" : ""}`} />
+              <span className={linkUnderline(location.pathname.startsWith("/products"))} />
             </button>
             <NavLink to="/career" className={linkClass}>
               Career
+              <span className={linkUnderline(location.pathname === "/career")} />
             </NavLink>
             <NavLink to="/contact" className={linkClass}>
               Contact Us
+              <span className={linkUnderline(location.pathname === "/contact")} />
             </NavLink>
           </div>
         </nav>

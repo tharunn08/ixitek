@@ -66,7 +66,7 @@ export default function Career() {
         </div>
       </section>
 
-      <section className="py-14 sm:py-16">
+      <section className="py-16 sm:py-20 lg:py-24">
         <div className="container-page">
           <SectionHeading
             eyebrow="Where you can contribute"
@@ -98,7 +98,7 @@ export default function Career() {
         </div>
       </section>
 
-      <section className="border-t border-ink-100 bg-ink-50/40 py-14 sm:py-16">
+      <section className="border-t border-ink-100 bg-ink-50/40 py-16 sm:py-20 lg:py-24">
         <div className="container-page grid grid-cols-1 gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
           <div className="flex flex-col gap-4">
             <Badge>Apply now</Badge>

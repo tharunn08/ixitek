@@ -141,7 +141,7 @@ export default function EnquiryForm({ presetSubject = "", compact = false }) {
       <button
         type="submit"
         disabled={status === "submitting"}
-        className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70"
+        className="focus-ring inline-flex items-center justify-center gap-2 rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white transition-all duration-200 active:scale-[0.98] hover:bg-brand-700 hover:shadow-[0_10px_24px_-6px_rgba(29,84,201,0.45)] disabled:cursor-not-allowed disabled:opacity-70"
       >
         <AnimatePresence mode="wait" initial={false}>
           {status === "submitting" ? (

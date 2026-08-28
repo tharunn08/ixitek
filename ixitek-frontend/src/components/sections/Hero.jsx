@@ -17,7 +17,7 @@ const fadeUp = {
 
 export default function Hero() {
   return (
-    <section className="relative overflow-hidden bg-gradient-to-br from-brand-900 via-[#0f2454] to-brand-950">
+    <section className="bg-noise relative overflow-hidden bg-gradient-to-br from-brand-900 via-[#0f2454] to-brand-950">
       <div className="absolute inset-0 bg-grid opacity-[0.05]" />
       <HeroFiberField />
       <div className="absolute -top-40 left-1/3 h-[520px] w-[520px] animate-drift-a rounded-full bg-brand-500/25 blur-[120px]" />

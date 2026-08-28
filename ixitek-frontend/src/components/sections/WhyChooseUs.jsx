@@ -7,7 +7,7 @@ const icons = ["Gauge", "Handshake", "Sparkles", "Globe2"];
 
 export default function WhyChooseUs() {
   return (
-    <section className="py-14 sm:py-16">
+    <section className="py-16 sm:py-20 lg:py-24">
       <div className="container-page grid grid-cols-1 gap-14 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="lg:sticky lg:top-28 lg:self-start">
           <SectionHeading

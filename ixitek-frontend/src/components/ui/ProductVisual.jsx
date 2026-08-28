@@ -19,18 +19,33 @@ export default function ProductVisual({
   className = "",
   iconClassName = "h-14 w-14",
   interactive = true,
+  fit = "contain",
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const tone = TONES[toneIndex % TONES.length];
 
   if (image && !imageFailed) {
+    if (fit === "cover") {
+      return (
+        <div className={`relative overflow-hidden ${className}`}>
+          <img
+            src={image}
+            alt={alt || ""}
+            onError={() => setImageFailed(true)}
+            className={`h-full w-full object-cover transition-transform duration-500 ${
+              interactive ? "group-hover:scale-105" : ""
+            }`}
+          />
+        </div>
+      );
+    }
     return (
-      <div className={`relative overflow-hidden bg-ink-100 ${className}`}>
+      <div className={`relative overflow-hidden bg-ink-50 ${className}`}>
         <img
           src={image}
           alt={alt || ""}
           onError={() => setImageFailed(true)}
-          className={`h-full w-full object-cover transition-transform duration-500 ${
+          className={`h-full w-full object-contain p-5 transition-transform duration-500 sm:p-6 ${
             interactive ? "group-hover:scale-105" : ""
           }`}
         />

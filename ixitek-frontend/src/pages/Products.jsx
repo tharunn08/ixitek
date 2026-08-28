@@ -46,7 +46,7 @@ export default function Products() {
         </div>
       </section>
 
-      <section className="py-14 sm:py-16">
+      <section className="py-16 sm:py-20 lg:py-24">
         <div className="container-page">
           <ProductFilterBar
             query={query}

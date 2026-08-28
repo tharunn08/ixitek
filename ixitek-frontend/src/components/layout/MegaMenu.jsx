@@ -73,7 +73,7 @@ export default function MegaMenu({ open, onClose }) {
                 <Link
                   to="/contact"
                   onClick={onClose}
-                  className="focus-ring inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+                  className="focus-ring inline-flex items-center gap-1.5 rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-all duration-200 hover:bg-brand-700 hover:shadow-[0_8px_20px_-6px_rgba(29,84,201,0.45)]"
                 >
                   Get a quote
                   <Icon name="ArrowRight" className="h-3.5 w-3.5" />

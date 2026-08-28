@@ -47,12 +47,13 @@ export default function CategoryPage() {
               toneIndex={catIndex}
               className="aspect-square w-full rounded-2xl"
               iconClassName="h-20 w-20"
+              fit="cover"
             />
           </Reveal>
         </div>
       </section>
 
-      <section className="py-14 sm:py-16">
+      <section className="py-16 sm:py-20 lg:py-24">
         <div className="container-page">
           <SectionHeading
             eyebrow="Product families"
