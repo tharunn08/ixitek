@@ -1,4 +1,3 @@
-```jsx
 import { Link } from "react-router-dom";
 import { Icon } from "../../lib/icons.jsx";
 import Logo from "../ui/Logo.jsx";
@@ -94,7 +93,6 @@ export default function Footer() {
 
       <div className="border-t border-white/5">
         <div className="container-page flex flex-col items-center justify-between gap-5 py-6 text-xs text-ink-500 sm:flex-row">
-          
           <div className="flex flex-col gap-2">
             <span>
               &copy; {year} {company.legalNameIN}. All rights reserved.
@@ -103,22 +101,23 @@ export default function Footer() {
               D-U-N-S&reg; {company.duns} &middot; Bangalore, IN &amp; Sacramento, US
             </span>
           </div>
+        </div>
+      </div>
 
-          <div className="dnb-seal flex shrink-0 items-center justify-center">
-            <iframe
-              id="Iframe1"
-              src="https://dunsregistered.dnb.com/SealAuthentication.aspx?Cid=1"
-              width="114"
-              height="97"
-              frameBorder="0"
-              scrolling="no"
-              title="Dun & Bradstreet Registered Business Seal"
-            />
-          </div>
-
+      <div className="border-t border-white/5 bg-white">
+        <div className="container-page flex items-center justify-center py-4">
+          <iframe
+            id="Iframe1"
+            src="https://dunsregistered.dnb.com/SealAuthentication.aspx?Cid=1"
+            width="114"
+            height="97"
+            frameBorder="0"
+            scrolling="no"
+            allowTransparency="true"
+            title="Dun & Bradstreet Registered Business Seal"
+          />
         </div>
       </div>
     </footer>
   );
 }
-```
