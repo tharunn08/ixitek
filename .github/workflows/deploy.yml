@@ -30,13 +30,13 @@ jobs:
       - name: Build Vite application
         run: npm run build
 
-      - name: Deploy dist to Hostinger
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      - name: Deploy dist to Hostinger via SFTP
+        uses: appleboy/scp-action@v1
         with:
-          server: ${{ secrets.HOSTINGER_HOST }}
-          username: ${{ secrets.HOSTINGER_USERNAME }}
-          password: ${{ secrets.HOSTINGER_PASSWORD }}
-          protocol: ftps
-          port: ${{ secrets.HOSTINGER_PORT }}
-          local-dir: ./ixitek-frontend/dist/
-          server-dir: /home/u935782097/domains/ixitek.com/public_html/
+          host: ${{ secrets.HOSTINGER_SFTP_HOST }}
+          username: ${{ secrets.HOSTINGER_SFTP_USERNAME }}
+          password: ${{ secrets.HOSTINGER_SFTP_PASSWORD }}
+          port: ${{ secrets.HOSTINGER_SFTP_PORT }}
+          source: "ixitek-frontend/dist/*"
+          target: "/home/u935782097/domains/ixitek.com/public_html/"
+          overwrite: true
