@@ -37,6 +37,7 @@ jobs:
           username: ${{ secrets.HOSTINGER_SFTP_USERNAME }}
           password: ${{ secrets.HOSTINGER_SFTP_PASSWORD }}
           port: ${{ secrets.HOSTINGER_SFTP_PORT }}
-          source: "ixitek-frontend/dist/*"
+          source: "ixitek-frontend/dist/*,ixitek-frontend/dist/.htaccess"
           target: "/home/u935782097/domains/ixitek.com/public_html/"
+          strip_components: 2
           overwrite: true
