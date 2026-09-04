@@ -12,9 +12,11 @@ export default function Footer() {
       <div className="container-page grid grid-cols-1 gap-12 py-16 lg:grid-cols-[1.2fr_0.85fr_0.85fr_1.5fr]">
         <div className="flex flex-col gap-5">
           <Logo light />
+
           <p className="max-w-xs text-sm leading-relaxed text-ink-300">
             {company.shortDescription}
           </p>
+
           <div className="flex items-center gap-3 pt-1">
             <a
               href={company.linkedin}
@@ -32,6 +34,7 @@ export default function Footer() {
           <span className="font-display text-xs font-bold uppercase tracking-[0.14em] text-ink-400">
             Company
           </span>
+
           {footerLinks.company.map((l) => (
             <Link
               key={l.to}
@@ -47,6 +50,7 @@ export default function Footer() {
           <span className="font-display text-xs font-bold uppercase tracking-[0.14em] text-ink-400">
             Solutions
           </span>
+
           {footerLinks.solutions.map((l) => (
             <Link
               key={l.to}
@@ -58,6 +62,7 @@ export default function Footer() {
           ))}
         </div>
 
+        {/* Our Offices */}
         <div className="flex flex-col gap-4">
           <span className="font-display text-xs font-bold uppercase tracking-[0.14em] text-ink-400">
             Our Offices
@@ -71,7 +76,7 @@ export default function Footer() {
             {company.email}
           </a>
 
-          {company.offices.map((office) => (
+          {company.offices.map((office, index) => (
             <div
               key={office.id}
               className="flex items-start gap-2.5 text-sm text-ink-300"
@@ -80,11 +85,24 @@ export default function Footer() {
                 name="MapPin"
                 className="mt-0.5 h-4 w-4 shrink-0 text-brand-400"
               />
+
               <span>
+                {/* Office Name */}
                 <span className="block text-xs font-semibold uppercase tracking-wide text-ink-200">
                   {office.label}
                 </span>
-                {office.address}
+
+                {/* Legal Company Name */}
+                <span className="block text-sm font-medium text-ink-200">
+                  {index === 0
+                    ? "Ixitek Solutions LLP"
+                    : "Ixitek Solutions LLC"}
+                </span>
+
+                {/* Address */}
+                <span className="block">
+                  {office.address}
+                </span>
               </span>
             </div>
           ))}
@@ -97,8 +115,10 @@ export default function Footer() {
             <span>
               &copy; {year} {company.legalNameIN}. All rights reserved.
             </span>
+
             <span>
-              D-U-N-S&reg; {company.duns} &middot; Bangalore, IN &amp; Sacramento, US
+              D-U-N-S&reg; {company.duns} &middot; Bangalore, IN &amp; Sacramento,
+              US
             </span>
           </div>
         </div>
