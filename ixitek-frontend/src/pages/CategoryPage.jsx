@@ -96,7 +96,7 @@ export default function CategoryPage() {
       </section>
 
       <CTASection
-        title={`Need help specifying ${category.name.replace(/t&m/gi, "T&M").toLowerCase()}?`}
+        title={`Need help specifying ${category.name.toLowerCase().replace(/t&m/g, "T&M")}?`}
         description="Share your project details and our engineers will recommend the right configuration."
       />
     </>
