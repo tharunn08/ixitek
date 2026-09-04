@@ -24,7 +24,7 @@ export const company = {
       label: "US Office",
       country: "United States",
       address: "1401 21st Street, Sacramento, CA 95811, USA",
-      phones: ["+1 (916) 282-2473"],
+      phones: ["+1 (408) 854-0856", "+1 (408) 416-7042"],
       email: "sales@ixitek.in",
     },
   ],
