@@ -1,0 +1,7 @@
+node_modules/
+.env
+npm-debug.log*
+
+# SQLite database + WAL/SHM files — this IS your data, don't commit it to
+# a public repo. Back it up separately (see .env.example / README.md).
+data/
