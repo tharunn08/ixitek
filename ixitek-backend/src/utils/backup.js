@@ -23,8 +23,12 @@ const path = require("path");
 const fs = require("fs");
 const { getDB, DB_PATH } = require("../db.js");
 
+// Same reasoning as DB_PATH in db.js: resolve a relative BACKUP_DIR against
+// ixitek-backend/, not the process's cwd, so it still lands next to the
+// database when started from the repo root (root package.json's `start`
+// script). An absolute BACKUP_DIR is used as-is.
 const BACKUP_DIR = process.env.BACKUP_DIR
-  ? path.resolve(process.env.BACKUP_DIR)
+  ? path.resolve(__dirname, "..", process.env.BACKUP_DIR)
   : path.join(path.dirname(DB_PATH), "backups");
 
 const RETENTION = Number(process.env.BACKUP_RETENTION) || 30;

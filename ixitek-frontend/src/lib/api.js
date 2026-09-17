@@ -1,11 +1,26 @@
 // api.js — small fetch wrapper for talking to the Ixitek backend
 // (ixitek-backend/, Node.js + Express + SQLite). Every other lib/*Store.js
 // file goes through this instead of touching `fetch` directly.
+//
+// API_BASE resolution:
+//   1. VITE_API_URL, if set at build time — use it as-is. This covers any
+//      deployment where the API genuinely lives on a different origin.
+//   2. Otherwise, in a production build: "" (empty string), so every call
+//      below (e.g. apiFetch("/api/auth/login")) becomes a plain relative
+//      request like "/api/auth/login" — resolved by the browser against
+//      whatever origin served the page. That's exactly right for this
+//      project's deployment target: ixitek-backend serves the built
+//      frontend AND the API from one Node process on one origin (e.g.
+//      https://ixitek.com), so the frontend never needs to know its own
+//      domain name and there's no separate API subdomain to hardcode.
+//   3. Otherwise, in local dev: "http://localhost:5000" — `npm run dev`
+//      serves the frontend from Vite on :5173 and the backend separately
+//      on :5000, so dev needs an absolute cross-origin URL.
+const envApiUrl =
+  typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_URL;
+const isProdBuild = typeof import.meta !== "undefined" && import.meta.env && import.meta.env.PROD;
 
-const API_BASE = (
-  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_URL) ||
-  "http://localhost:5000"
-).replace(/\/$/, "");
+const API_BASE = (envApiUrl || (isProdBuild ? "" : "http://localhost:5000")).replace(/\/$/, "");
 
 const TOKEN_KEY = "ixitek_auth_token_v1";
 

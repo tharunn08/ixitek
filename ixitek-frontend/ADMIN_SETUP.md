@@ -50,7 +50,13 @@ In `ixitek-frontend/.env` (copy `.env.example`):
 VITE_API_URL=http://localhost:5000
 ```
 
-Update this to your deployed backend's URL in production.
+That's only for local development, where the frontend (`:5173`) and
+backend (`:5000`) run on different ports. In production (see the root
+`README.md` → "Deploying to Hostinger"), `ixitek-backend` serves the built
+frontend itself from the same origin, so leave `VITE_API_URL` **unset** in
+production — the frontend automatically calls relative `/api/...` paths
+instead of a hardcoded URL. Only set it if the API is ever deployed on a
+genuinely different origin than the frontend.
 
 ## 3. Point enquiries at the right email and WhatsApp number
 

@@ -1,0 +1,19 @@
+{
+  "name": "ixitek",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Ixitek Solutions — deployed as ONE Node.js Web App. ixitek-backend (Express) serves its own /api/* routes AND the built ixitek-frontend (React/Vite) production bundle from a single origin, e.g. https://ixitek.com. Root scripts only orchestrate the two existing sub-projects (ixitek-frontend/package.json, ixitek-backend/package.json) — neither was changed in shape.",
+  "scripts": {
+    "install:backend": "npm install --prefix ixitek-backend",
+    "install:frontend": "npm install --prefix ixitek-frontend",
+    "build": "npm install --prefix ixitek-backend --no-audit --no-fund && npm install --prefix ixitek-frontend --no-audit --no-fund && npm run build --prefix ixitek-frontend",
+    "start": "node ixitek-backend/src/server.js",
+    "dev:backend": "npm run dev --prefix ixitek-backend",
+    "dev:frontend": "npm run dev --prefix ixitek-frontend",
+    "seed": "npm run seed --prefix ixitek-backend",
+    "backup": "npm run backup --prefix ixitek-backend"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

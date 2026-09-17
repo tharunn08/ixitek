@@ -1,9 +1,20 @@
-name: Build and Deploy to Hostinger
+# NOTE (one-Node-app deployment): this workflow predates the current
+# deployment model. The project is now deployed as ONE Hostinger Node.js
+# Web App, connected directly to this GitHub repo — Hostinger itself pulls
+# `main`, runs the root build command, and starts ixitek-backend, which
+# serves both the API and the built frontend from https://ixitek.com (see
+# the root README's "Deploying to Hostinger" section). That means this
+# workflow's job — SFTP-uploading only ixitek-frontend/dist to
+# public_html/ as a static site — is no longer part of the deployment
+# path, and would fight with it if it also ran on every push (two
+# different things updating the same domain). It's kept, disabled from
+# auto-running, only in case you ever want a manual one-off static upload;
+# trigger it by hand from the Actions tab. Delete this file entirely once
+# you're confident you won't need that fallback.
+name: (Legacy, manual only) Static frontend-only deploy via SFTP
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch: {}
 
 jobs:
   build-and-deploy:

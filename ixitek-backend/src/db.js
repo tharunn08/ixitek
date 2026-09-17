@@ -34,8 +34,17 @@ const path = require("path");
 const fs = require("fs");
 const Database = require("better-sqlite3");
 
+// Resolve a relative DB_PATH against this backend's own directory
+// (ixitek-backend/), not the process's current working directory. This
+// matters because the root package.json's `start` script runs
+// `node ixitek-backend/src/server.js` from the REPO ROOT, so a plain
+// path.resolve(process.env.DB_PATH) would otherwise write the database to
+// an unintended <repo-root>/data/ixitek.db instead of
+// ixitek-backend/data/ixitek.db. An absolute DB_PATH (e.g. a persistent
+// volume path on a host) still works as-is — path.resolve ignores the
+// base when the final segment is already absolute.
 const DB_PATH = process.env.DB_PATH
-  ? path.resolve(process.env.DB_PATH)
+  ? path.resolve(__dirname, "..", process.env.DB_PATH)
   : path.join(__dirname, "..", "data", "ixitek.db");
 
 let db = null;

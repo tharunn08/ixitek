@@ -53,6 +53,21 @@ failure:
 `data/ixitek.db-shm` files next to it, if present) with the chosen file
 from `data/backups/`, then start the server again.
 
+## Production: this backend also serves the frontend
+
+In production this server does two jobs from one process/one port: it
+answers `/api/*` as before, and it serves the built `ixitek-frontend/dist`
+(via `express.static`, with an SPA fallback to `index.html` for client-side
+routes) for everything else — see `src/app.js`. That's what lets the whole
+site run from a single origin (e.g. `https://ixitek.com`) with no separate
+API subdomain. Nothing here needs to run standalone in production; use the
+root `package.json`'s `npm install && npm run build && npm start` (see the
+repo root `README.md` → "Deploying to Hostinger" for the full walkthrough
+and exact Hostinger settings). Running just this backend on its own (`npm
+run dev` / `npm start` from inside `ixitek-backend/`) still works exactly as
+before for local development — it just won't have a `dist/` to serve until
+`ixitek-frontend` has been built.
+
 ## Setup
 
 ```bash
