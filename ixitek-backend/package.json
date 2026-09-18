@@ -2,7 +2,7 @@
   "name": "ixitek-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "Ixitek Solutions — Node.js / Express / SQLite backend. Handles user accounts (customers, staff, owner/admin), authentication, and storage for enquiries + career applications submitted from the website. No external database server required — everything lives in one local file via db.js.",
+  "description": "Ixitek Solutions — Node.js / Express / SQLite backend. Handles user accounts (customers, staff, owner/admin), authentication, and storage for enquiries + career applications submitted from the website. No external database server required — everything lives in one local file via db.js. Uses node-sqlite3-wasm (pure WebAssembly, no native compilation) so it installs on hosts without a C/C++ toolchain or a recent-enough glibc, such as Hostinger's shared/VPS Node.js hosting.",
   "type": "commonjs",
   "main": "src/server.js",
   "scripts": {
@@ -13,13 +13,12 @@
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
-    "better-sqlite3": "^11.3.0",
+    "node-sqlite3-wasm": "^0.8.60",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "^7.4.0",
     "helmet": "^7.1.0",
-    "ixitek": "file:..",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0"
   },

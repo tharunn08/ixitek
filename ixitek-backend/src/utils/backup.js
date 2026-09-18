@@ -1,14 +1,20 @@
-// utils/backup.js — protects against the kind of data loss WAL mode can't
-// cover: a deleted file, a corrupted disk, a bad deploy that wipes the
-// data/ folder. WAL + `synchronous = FULL` (see db.js) already make sure a
-// crash or power loss mid-write can't corrupt what's already committed —
-// this file is the second half of "no data loss": a standing copy
-// somewhere else.
+// utils/backup.js — protects against the kind of data loss journal mode
+// alone can't cover: a deleted file, a corrupted disk, a bad deploy that
+// wipes the data/ folder. The journal mode + `synchronous = FULL` (see
+// db.js) already make sure a crash or power loss mid-write can't corrupt
+// what's already committed — this file is the second half of "no data
+// loss": a standing copy somewhere else.
 //
-// Uses better-sqlite3's built-in `.backup()`, which performs a safe
-// *online* backup (it can run while the server is up and being written
-// to — it does not lock out other requests) rather than a raw file copy,
-// which could grab a half-written WAL and produce a broken copy.
+// Uses SQLite's own `VACUUM INTO 'path'` command (via db.js's
+// `db.backupTo()`), which performs a safe *online* backup (it can run
+// while the server is up and being written to — it does not lock out
+// other requests) and produces a single, fully consistent snapshot file,
+// rather than a raw file copy, which could grab a half-written file and
+// produce a broken copy. This replaces better-sqlite3's built-in
+// `.backup()` method, which node-sqlite3-wasm doesn't provide — VACUUM
+// INTO is SQLite's own equivalent, built into the engine itself rather
+// than a driver-specific API, so it works the same regardless of which
+// SQLite binding sits on top of it.
 //
 // Three ways this runs:
 //   1. Automatically on an interval while the server is running (wired up
@@ -43,7 +49,7 @@ async function runBackup() {
   const fileName = `ixitek-${timestamp()}.db`;
   const destPath = path.join(BACKUP_DIR, fileName);
 
-  await db.backup(destPath);
+  db.backupTo(destPath);
   console.log(`[backup] Wrote ${destPath}`);
 
   pruneOldBackups();

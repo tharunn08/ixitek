@@ -57,11 +57,14 @@ whole site, frontend and API, is served from that one address.
    admin panel automatically based on their account's role.
 2. **A real backend** (`ixitek-backend/`) — Node.js + Express, with
    `src/db.js` as the *only* place the database is touched. It uses
-   **SQLite** (via `better-sqlite3`) — a single local file, so there's no
-   separate database server or account to set up; just run the backend
-   and it creates `data/ixitek.db` automatically. It comfortably holds a
-   large, growing volume of records for a site like this. Passwords are
-   hashed with bcrypt; sessions are JWTs.
+   **SQLite** (via `node-sqlite3-wasm`, a pure WebAssembly SQLite build
+   with no native compilation step — chosen so `npm install` works on
+   hosts like Hostinger that lack a C/C++ toolchain or a recent-enough
+   glibc) — a single local file, so there's no separate database server or
+   account to set up; just run the backend and it creates `data/ixitek.db`
+   automatically. It comfortably holds a large, growing volume of records
+   for a site like this. Passwords are hashed with bcrypt; sessions are
+   JWTs.
 3. **Data is protected against loss two ways**: WAL journal mode +
    fsync-on-commit (so a crash or power loss mid-write can't corrupt
    already-saved data — always on, nothing to configure), *and* automatic
@@ -92,6 +95,19 @@ whole site, frontend and API, is served from that one address.
    `package.json` gives a single `npm install && npm run build && npm start`
    flow. See "Deploying to Hostinger" below. No routes, features, styling or
    database behaviour were changed to make this work.
+8. **SQLite driver swapped for Hostinger compatibility** — `ixitek-backend`
+   now uses `node-sqlite3-wasm` instead of `better-sqlite3`. Both are the
+   same SQLite engine underneath and the schema, API endpoints and
+   application behaviour are unchanged; only *how* the SQLite engine gets
+   into `node_modules` changed. `better-sqlite3` is a native addon that
+   must be compiled (or match a prebuilt binary) for the exact host it
+   runs on, and Hostinger's shared/VPS Node.js hosts have neither a
+   new-enough glibc nor a C/C++ toolchain, so `npm install` failed there.
+   `node-sqlite3-wasm` compiles SQLite3 to WebAssembly instead — pure JS +
+   a `.wasm` file, no native compilation, no glibc dependency — while
+   still persisting to the same single `data/ixitek.db` file on disk. See
+   the comments at the top of `ixitek-backend/src/db.js` for the full
+   rationale and the small compatibility shim this required.
 
 Nothing about the existing pages' content, copy, or visual design was
 changed beyond what's described above.
@@ -112,7 +128,7 @@ repository**, then enter:
 | Branch | `main` |
 | Root directory | `/` (repository root — leave blank/default) |
 | Framework | Node.js / Express (custom Node app — not a framework preset) |
-| Node.js version | 20.x LTS (any Node ≥ 18 works — see `engines` in `package.json`; 20.x is the safest widely-supported choice for `better-sqlite3`'s prebuilt binaries) |
+| Node.js version | 20.x LTS (any Node ≥ 18 works — see `engines` in `package.json`; the database layer is now pure WebAssembly via `node-sqlite3-wasm`, so there's no native-binary/glibc constraint driving this choice — 20.x LTS is just a solid, widely-supported default) |
 | Package manager | npm |
 | Install/Build command | `npm install && npm run build` |
 | Start command | `npm start` |
