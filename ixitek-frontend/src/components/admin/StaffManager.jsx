@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "../../lib/icons.jsx";
-import { getStaff, loadStaff, addStaff, deleteStaff, subscribeToStaff } from "../../lib/staffStore.js";
+import { getStaff, loadStaff, addStaff, deleteStaff, subscribeToStaff, loadRoles, setStaffRole } from "../../lib/staffStore.js";
 
 export default function StaffManager({ open, onClose }) {
   const [staff, setStaff] = useState(() => getStaff());
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "staff" });
+  const [roles, setRoles] = useState([]);
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useState("idle"); // idle | submitting
   const [showPassword, setShowPassword] = useState(false);
@@ -15,6 +16,7 @@ export default function StaffManager({ open, onClose }) {
     const unsubscribe = subscribeToStaff(setStaff);
     if (open) {
       loadStaff().catch((err) => setLoadError(err?.message || "Could not load teammates."));
+      loadRoles().then(setRoles).catch(() => {});
     }
     return unsubscribe;
   }, [open]);
@@ -29,7 +31,7 @@ export default function StaffManager({ open, onClose }) {
     if (!form.name.trim()) next.name = "Enter a name.";
     if (!form.email.trim()) next.email = "Enter an email.";
     else if (!/^\S+@\S+\.\S+$/.test(form.email)) next.email = "Enter a valid email address.";
-    if (!form.password || form.password.length < 6) next.password = "At least 6 characters.";
+    if (!form.password || form.password.length < 8) next.password = "At least 8 characters.";
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -40,7 +42,7 @@ export default function StaffManager({ open, onClose }) {
     setStatus("submitting");
     try {
       await addStaff(form);
-      setForm({ name: "", email: "", password: "" });
+      setForm({ name: "", email: "", password: "", role: form.role });
       setStatus("idle");
     } catch (err) {
       setErrors({ email: err?.message || "Could not add this teammate." });
@@ -129,7 +131,7 @@ export default function StaffManager({ open, onClose }) {
                       type={showPassword ? "text" : "password"}
                       value={form.password}
                       onChange={(e) => update("password", e.target.value)}
-                      placeholder="At least 6 characters"
+                      placeholder="At least 8 characters"
                       className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 pr-9 text-sm text-ink-800 outline-none transition-colors focus:border-brand-400"
                     />
                     <button
@@ -142,6 +144,21 @@ export default function StaffManager({ open, onClose }) {
                     </button>
                   </div>
                   {errors.password && <span className="text-xs text-red-600">{errors.password}</span>}
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-ink-600">Role</label>
+                  <select
+                    value={form.role}
+                    onChange={(e) => update("role", e.target.value)}
+                    className="rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-800 outline-none focus:border-brand-400"
+                  >
+                    {(roles.length ? roles : [{ code: "staff", name: "Staff" }]).map((r) => (
+                      <option key={r.code} value={r.code}>
+                        {r.name}{r.description ? ` — ${r.description}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[11px] text-ink-400">Only Owner, Super Admin, Pricing and Finance roles can see confidential supplier costs.</span>
                 </div>
                 <button
                   type="submit"
@@ -170,6 +187,20 @@ export default function StaffManager({ open, onClose }) {
                         <div className="min-w-0">
                           <p className="truncate text-sm font-semibold text-ink-800">{s.name}</p>
                           <p className="truncate text-xs text-ink-500">{s.email}</p>
+                          {roles.length > 0 && (
+                            <select
+                              aria-label={`Role for ${s.name}`}
+                              value={s.role}
+                              onChange={(e) =>
+                                setStaffRole(s.id, e.target.value).catch((err) => setLoadError(err?.message || "Could not change the role."))
+                              }
+                              className="mt-1 rounded-md border border-ink-200 bg-white px-2 py-1 text-[11px] text-ink-700"
+                            >
+                              {roles.map((r) => (
+                                <option key={r.code} value={r.code}>{r.name}</option>
+                              ))}
+                            </select>
+                          )}
                         </div>
                       </div>
                       <button

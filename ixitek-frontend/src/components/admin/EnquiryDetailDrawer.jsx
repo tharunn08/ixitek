@@ -1,4 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
+import { apiDownload } from "../../lib/api.js";
 import { Icon } from "../../lib/icons.jsx";
 import { buildMailtoLink, buildWhatsAppLink } from "../../lib/notifications.js";
 
@@ -29,6 +30,10 @@ function Row({ icon, label, value, href }) {
       </div>
     </div>
   );
+}
+
+function alertDownload() {
+  window.dispatchEvent(new CustomEvent("ixitek:toast", { detail: { tone: "error", message: "Could not download the file." } }));
 }
 
 export default function EnquiryDetailDrawer({ record, onClose, onStatusChange, onDelete }) {
@@ -90,16 +95,23 @@ export default function EnquiryDetailDrawer({ record, onClose, onStatusChange, o
                 <Row icon="Phone" label="Phone" value={record.phone} href={record.phone ? `tel:${record.phone.replace(/\s/g, "")}` : undefined} />
                 <Row icon="Building2" label="Company" value={record.company} />
                 <Row icon="Filter" label="Area of interest" value={record.category} />
-                {record.type === "career" && record.resumeDataUrl && (
-                  <Row
-                    icon="Download"
-                    label="Resume / CV"
-                    value={record.resumeFileName || "Download attachment"}
-                    href={record.resumeDataUrl}
-                  />
+                {record.type === "career" && record.resumeUrl && (
+                  <div className="flex items-start gap-3 border-b border-ink-100 py-3 last:border-0">
+                    <Icon name="Download" className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
+                    <div className="min-w-0">
+                      <span className="block text-[11px] font-semibold uppercase tracking-wide text-ink-400">Resume / CV</span>
+                      <button
+                        type="button"
+                        onClick={() => apiDownload(record.resumeUrl, record.resumeFileName || "resume").catch(() => alertDownload())}
+                        className="focus-ring mt-0.5 text-sm font-medium text-brand-700 hover:underline"
+                      >
+                        {record.resumeFileName || "Download attachment"}
+                      </button>
+                    </div>
+                  </div>
                 )}
-                {record.type === "career" && !record.resumeDataUrl && record.resumeFileName && (
-                  <Row icon="FileText" label="Resume / CV" value={`${record.resumeFileName} (too large to store in-browser)`} />
+                {record.type === "career" && !record.resumeUrl && record.resumeFileName && (
+                  <Row icon="FileText" label="Resume / CV" value={`${record.resumeFileName} (file not attached)`} />
                 )}
               </div>
 

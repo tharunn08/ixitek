@@ -8,10 +8,9 @@ import { sendEmailNotification, buildWhatsAppLink, buildMailtoLink } from "../..
 
 const initialForm = { name: "", email: "", message: "" };
 
-// Resumes are stored inline (base64) in the browser so the admin panel can
-// offer a "download CV" link — there's no server to upload them to. Cap the
-// size so one large PDF can't blow through the localStorage quota.
-const MAX_STORED_FILE_BYTES = 350 * 1024;
+// Resumes are sent to the server, which validates the type and stores the
+// file in protected storage (only the admin panel can download it).
+const MAX_STORED_FILE_BYTES = 1.4 * 1024 * 1024;
 
 function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {

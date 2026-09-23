@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { useSearchParams } from "react-router-dom";
 import Breadcrumbs from "../components/layout/Breadcrumbs.jsx";
 import Badge from "../components/ui/Badge.jsx";
 import Reveal from "../components/ui/Reveal.jsx";
@@ -8,6 +9,9 @@ import { Icon } from "../lib/icons.jsx";
 import { company } from "../data/company.js";
 
 export default function Contact() {
+  // Product pages link here with ?subject=… so the enquiry arrives pre-filled.
+  const [params] = useSearchParams();
+  const presetSubject = (params.get("subject") || "").slice(0, 500);
   return (
     <>
       <section className="relative overflow-hidden border-b border-ink-100 bg-ink-950 py-12 sm:py-14">
@@ -75,7 +79,7 @@ export default function Contact() {
               Fill out the form and our solutions team will follow up by email or phone.
             </p>
             <div className="mt-6">
-              <EnquiryForm />
+              <EnquiryForm key={presetSubject} presetSubject={presetSubject} />
             </div>
           </Reveal>
         </div>

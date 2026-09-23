@@ -8,6 +8,8 @@ import CTASection from "../components/sections/CTASection.jsx";
 import Reveal from "../components/ui/Reveal.jsx";
 import { Icon } from "../lib/icons.jsx";
 import { families } from "../data/products.js";
+import CategoryTabs from "../components/catalog/CategoryTabs.jsx";
+import { Link } from "react-router-dom";
 
 export default function Products() {
   const [query, setQuery] = useState("");
@@ -46,8 +48,25 @@ export default function Products() {
         </div>
       </section>
 
+      {/* Online catalog entry: the two primary product lines (database-driven). */}
+      <section className="border-b border-ink-100 bg-white">
+        <div className="container-page flex flex-col gap-4 py-8">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-400">Online product catalog</div>
+              <h2 className="mt-1 font-display text-2xl font-bold text-ink-900">Shop by part number, specification and stock</h2>
+            </div>
+            <Link to="/catalog" className="focus-ring inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+              Open catalog <Icon name="ArrowRight" className="h-4 w-4" />
+            </Link>
+          </div>
+          <CategoryTabs active={null} />
+        </div>
+      </section>
+
       <section className="py-16 sm:py-20 lg:py-24">
         <div className="container-page">
+          <h2 className="mb-6 font-display text-xl font-bold text-ink-900">Solutions &amp; product families</h2>
           <ProductFilterBar
             query={query}
             onQuery={setQuery}

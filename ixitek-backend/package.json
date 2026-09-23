@@ -2,30 +2,53 @@
   "name": "ixitek-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "Ixitek Solutions — Node.js / Express / SQLite backend. Handles user accounts (customers, staff, owner/admin), authentication, and storage for enquiries + career applications submitted from the website. No external database server required — everything lives in one local file via db.js. Uses node-sqlite3-wasm (pure WebAssembly, no native compilation) so it installs on hosts without a C/C++ toolchain or a recent-enough glibc, such as Hostinger's shared/VPS Node.js hosting.",
+  "description": "Ixitek Solutions \u2014 Node.js / Express / MySQL backend (modular monolith): accounts & RBAC, enquiries, product catalog/PIM, Excel import, confidential cost-based pricing, inventory, audit log and verified backups.",
   "type": "commonjs",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "migrate": "node src/core/migrate.js",
+    "migrate:status": "node src/core/migrate.js --status",
+    "migrate:legacy": "node src/legacy/migrateFromSqlite.js",
+    "migrate:legacy:dry": "node src/legacy/migrateFromSqlite.js --dry-run",
     "seed": "node src/utils/seed.js",
-    "backup": "node src/utils/backup.js"
+    "backup": "node src/utils/backup.js",
+    "test": "node --test --test-concurrency=1 test/*.test.js",
+    "restore": "node src/utils/restore.js",
+    "restore:test": "node src/utils/restore.js --test",
+    "loadtest": "node scripts/loadtest.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
-    "node-sqlite3-wasm": "^0.8.60",
+    "compression": "^1.8.2",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
+    "csv-parse": "^7.0.2",
+    "decimal.js": "^10.6.0",
     "dotenv": "^16.4.5",
+    "exceljs": "^4.4.0",
     "express": "^4.19.2",
     "express-rate-limit": "^7.4.0",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
-    "morgan": "^1.10.0"
+    "morgan": "^1.10.0",
+    "multer": "^2.4.0",
+    "mysql2": "^3.24.4",
+    "node-sqlite3-wasm": "^0.8.60",
+    "nodemailer": "^10.0.10",
+    "pdfkit": "^0.20.2"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "autocannon": "^8.0.0",
+    "nodemon": "^3.1.4",
+    "smtp-server": "^3.19.13",
+    "supertest": "^7.2.2"
   },
   "engines": {
     "node": ">=18"
+  },
+  "optionalDependencies": {
+    "sharp": "^0.35.4"
   }
 }

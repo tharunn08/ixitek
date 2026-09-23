@@ -26,13 +26,24 @@ export async function loadStaff() {
   return setCache(staff);
 }
 
-export async function addStaff({ name, email, password }) {
+export async function addStaff({ name, email, password, role = "staff" }) {
   const { staff } = await apiFetch("/api/admin/staff", {
     method: "POST",
-    body: { name, email, password },
+    body: { name, email, password, role },
   });
   setCache([staff, ...cache]);
   return staff;
+}
+
+export async function setStaffRole(id, role) {
+  const { staff } = await apiFetch(`/api/admin/staff/${id}/role`, { method: "PATCH", body: { role } });
+  setCache(cache.map((s) => (s.id === id ? staff : s)));
+  return staff;
+}
+
+export async function loadRoles() {
+  const { roles } = await apiFetch("/api/admin/roles");
+  return roles.filter((r) => r.isStaff && r.code !== "owner");
 }
 
 export async function deleteStaff(id) {

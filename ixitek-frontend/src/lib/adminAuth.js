@@ -1,82 +1,59 @@
-// Authentication for the site's single login page — used by everyone who
-// signs in: website visitors with a customer account, teammates ("staff"),
-// and the owner/admin. Backed by the Node.js/Express/SQLite backend in
-// ixitek-backend/ (see src/lib/api.js) rather than browser storage, so
-// accounts and sessions work the same from any device.
-//
-// The session itself (the decoded JWT payload we care about) is still
-// cached in localStorage so the UI doesn't flash a logged-out state on
-// every reload — but the token is verified against the real database on
-// every API call, not trusted blindly.
+// adminAuth.js — sign in / sign up / sign out for everyone (customers,
+// staff, owner). The session itself is an httpOnly cookie managed by the
+// server; only non-secret profile info (name, role, permissions) is cached
+// in localStorage so the UI doesn't flash a signed-out state on reload.
+// The server re-checks the session and role on every request regardless.
+import { apiFetch, setCsrfToken } from "./api.js";
 
-import { apiFetch, getToken, setToken } from "./api.js";
-
-const SESSION_KEY = "ixitek_admin_session_v1";
+const SESSION_KEY = "ixitek_admin_session_v2";
 export const ADMIN_AUTH_EVENT = "ixitek:admin-auth-changed";
 
 function persistSession(session) {
   try {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    else localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem("ixitek_admin_session_v1");
   } catch {
-    // ignore quota errors
+    /* private mode */
   }
   window.dispatchEvent(new CustomEvent(ADMIN_AUTH_EVENT));
 }
 
-/** Sign in. `identifier` is an email (customer/staff) or the owner's email/username. */
+function toSession({ user, permissions, csrfToken }) {
+  if (csrfToken) setCsrfToken(csrfToken);
+  return { ...user, permissions: permissions || [] };
+}
+
 export async function login(identifier, password, { remember = false } = {}) {
   try {
-    const { token, user } = await apiFetch("/api/auth/login", {
-      method: "POST",
-      auth: false,
-      body: { identifier, password, remember },
-    });
-    setToken(token);
-    const session = { ...user, token };
+    const data = await apiFetch("/api/auth/login", { method: "POST", body: { identifier, password, remember } });
+    const session = toSession(data);
     persistSession(session);
     return session;
   } catch (err) {
     const error = new Error(err?.message || "The email/username or password you entered is incorrect.");
-    error.code = "INVALID_CREDENTIALS";
+    error.code = err?.status === 423 ? "LOCKED" : "INVALID_CREDENTIALS";
     throw error;
   }
 }
 
-/** Create a new customer account, then sign them in immediately. */
 export async function register({ name, email, phone, company, password }) {
-  try {
-    const { token, user } = await apiFetch("/api/auth/register", {
-      method: "POST",
-      auth: false,
-      body: { name, email, phone, company, password },
-    });
-    setToken(token);
-    const session = { ...user, token };
-    persistSession(session);
-    return session;
-  } catch (err) {
-    const error = new Error(err?.message || "Could not create your account. Please try again.");
-    throw error;
-  }
+  const data = await apiFetch("/api/auth/register", { method: "POST", body: { name, email, phone, company, password } });
+  const session = toSession(data);
+  persistSession(session);
+  return session;
 }
 
 export function logout() {
-  setToken(null);
-  try {
-    localStorage.removeItem(SESSION_KEY);
-  } catch {
-    // ignore
-  }
-  window.dispatchEvent(new CustomEvent(ADMIN_AUTH_EVENT));
+  apiFetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+  setCsrfToken(null);
+  persistSession(null);
 }
 
 export function getSession() {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    const session = JSON.parse(raw);
-    if (!session?.token || session.token !== getToken()) return null;
-    return session;
+    return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
@@ -86,22 +63,25 @@ export function isAuthenticated() {
   return Boolean(getSession());
 }
 
-/** True for roles allowed into /admin. */
-export function isAdminRole(role) {
+/** Any team role can open the admin panel (server enforces the real permissions). */
+export function isAdminRole(role, permissions) {
+  if (Array.isArray(permissions) && permissions.includes("admin.access")) return true;
   return role === "owner" || role === "staff";
 }
 
-/** Re-validate the cached session against the backend (e.g. on app load). */
+export function hasPermission(session, permission) {
+  return Boolean(session && (session.role === "owner" || (session.permissions || []).includes(permission)));
+}
+
+/** Re-validate the cached session against the backend (on app load). */
 export async function refreshSession() {
-  const token = getToken();
-  if (!token) return null;
   try {
-    const { user } = await apiFetch("/api/auth/me");
-    const session = { ...user, token };
+    const data = await apiFetch("/api/auth/me");
+    const session = toSession(data);
     persistSession(session);
     return session;
-  } catch {
-    logout();
+  } catch (err) {
+    if (err?.status === 401 || err?.status === 403) persistSession(null);
     return null;
   }
 }

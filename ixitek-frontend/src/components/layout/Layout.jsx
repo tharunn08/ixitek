@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Outlet } from "react-router-dom";
 import Header from "./Header.jsx";
 import Footer from "./Footer.jsx";
@@ -14,7 +15,10 @@ export default function Layout() {
       <Header />
       <main className="flex-1">
         <PageTransition>
-          <Outlet />
+          {/* Keeps header/footer on screen while a code-split page loads. */}
+          <Suspense fallback={<div className="container-page py-16" aria-busy="true"><div className="h-64 animate-pulse rounded-xl bg-ink-100/70" /></div>}>
+            <Outlet />
+          </Suspense>
         </PageTransition>
       </main>
       <Footer />

@@ -1,3 +1,23 @@
+# ixitek-backend
+
+> **2026 update:** this backend now runs on **MySQL** as a modular monolith. See the root `README.md` for setup, the cut-over runbook and admin areas.
+>
+> ```
+> src/
+>   core/        config, db (mysql2 pool + tx), migrate, errors, logger, requestId, money (decimal.js), audit, rbac, jobs, storage
+>   modules/     catalog (public + admin API, attribute parser) · import (xlsx/csv parser, preview/confirm, image checks)
+>                pricing (confidential cost → selling price engine) · inventory (warehouses, stock ledger)
+>   routes/      auth, enquiries, admin (legacy areas, now MySQL + RBAC)
+>   migrations/  0001_core … 0005_imports (checksummed, applied on start)
+>   legacy/      old SQLite module + migrateFromSqlite.js (one-time data copy)
+>   utils/       backup (verified MySQL dumps), seed (owner)
+> test/          node:test suites (unit + API against MySQL)
+> ```
+>
+> Scripts: `npm start`, `npm run dev`, `npm run migrate`, `npm run migrate:status`, `npm run migrate:legacy[:dry]`, `npm run backup`, `npm test`.
+>
+> The sections below describe the earlier SQLite version and are kept for history.
+
 # Ixitek backend
 
 A small Node.js / Express / SQLite API that powers real accounts and real

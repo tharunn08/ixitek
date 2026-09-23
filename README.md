@@ -1,4 +1,54 @@
-# Ixitek Solutions — Website
+# IXITEK — B2B E-commerce, International Trade & ERP-lite Platform
+
+One Node.js application (Hostinger Node.js Web App):
+
+- **`ixitek-frontend/`** — React 19 + Vite + React Router + Tailwind. Company site, SAP/ERP micro-site, storefront (catalog, cart, checkout, RFQ, quotes, customer portal) and the admin console.
+- **`ixitek-backend/`** — Node.js + Express **modular monolith on MySQL 8 / MariaDB 10.6+**. Serves `/api/*` and the built frontend (with server-rendered SEO metadata) from one origin.
+
+| Document | Contents |
+|---|---|
+| [`docs/FINAL_REPORT.md`](docs/FINAL_REPORT.md) | Architecture, modules, schema, APIs, payments, charges, email, backups, security, performance, test results, limitations |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Exact Hostinger steps, environment variables, Razorpay/email/backup setup, go-live checklist, rollback |
+| [`docs/IMPLEMENTATION_ASSESSMENT.md`](docs/IMPLEMENTATION_ASSESSMENT.md) | Original audit and plan |
+
+## What the platform does
+
+| Area | Summary |
+|---|---|
+| Catalog & pricing | PIM with Excel import; supplier FOB/EXW **costs are confidential** (never in public APIs, pages, emails, invoices); selling price = cost + margin rules/overrides; no price → *Request a Quote*. |
+| International | Countries, languages, currencies, USD-based FX (provider + manual + override, never chained), freight by chargeable weight / CBM, customs, import tax, TDS, Incoterms, landed-cost estimates with explicit disclaimers. Unconfigured countries → quote. |
+| Storefront | FS-style header (ship-to country/currency, Products mega menu, Solutions, Services, Resources, Support, Company, search, RFQ, cart), catalog with Add to cart / Buy now on every priced product, PDP with delivered-cost estimate, cart, quick order, BOM upload, checkout, order tracking, RFQ, quotes, support, customer portal, company accounts. |
+| Payments & documents | Razorpay (server-side orders, HMAC checks, webhooks, reconciliation, refunds, fees stored separately), bank transfer, purchase-order credit terms; proforma / tax invoice / credit note PDFs; Indian GST split (CGST + SGST/UTGST or IGST by place of supply, GSTIN validation, HSN summary, GST register CSV); quotation PDFs. |
+| Operations | Shipments & tracking, inventory reservations, procurement (suppliers, POs, goods receipts, supplier invoices), returns/RMA/warranty, tickets, CRM, companies. |
+| Platform | Server email outbox (SMTP/Resend/SendGrid), background jobs, audit log, RBAC, monitoring, tiered verified backups + automated restore tests, pre-migration backups, SEO (sitemap, robots, canonical, OG, JSON-LD). |
+
+## Local development
+
+```bash
+# MySQL 8 (or MariaDB 10.6+) with a database + user:
+#   CREATE DATABASE ixitek CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+cd ixitek-backend && cp .env.example .env   # fill DB_*, JWT_SECRET, OWNER_*
+npm install && npm run dev                  # http://localhost:5000 (migrates automatically)
+cd ../ixitek-frontend && npm install && npm run dev   # http://localhost:5173
+```
+
+Tests use separate empty databases (`ixitek_test`, and `ixitek_restore_test` for the restore test):
+
+```bash
+cd ixitek-backend
+DB_NAME_TEST=ixitek_test CATALOG_XLSX=/path/to/Product_Catalog.xlsx npm test
+```
+
+The supplier workbook is confidential (it contains costs) and is **never committed** (`*.xlsx` is git-ignored); without `CATALOG_XLSX` the import/pricing tests are skipped.
+
+Useful scripts (backend): `npm run migrate`, `npm run migrate:status`, `npm run backup`, `npm run restore -- <file> --into <db> --yes`, `npm run restore:test`, `npm run loadtest` (against staging), `npm run migrate:legacy`.
+
+---
+
+## History (pre-2026 notes, SQLite era)
+
+The notes below describe the earlier SQLite-based version and are kept for reference. The database layer is now MySQL (see above); the old SQLite module lives in `ixitek-backend/src/legacy/` and is only used by the migration script.
+
 
 Two projects, deployed together as **one app**:
 

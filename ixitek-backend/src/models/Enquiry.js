@@ -1,8 +1,8 @@
-// Enquiry.js — product enquiries (Contact/Enquiry form) and career
-// applications (Career form). One table with a `type` column to match the
-// admin dashboard's "All / Product enquiries / Career applications" tabs.
+// Enquiry model — MySQL. Résumé bytes live in file storage (core/storage.js),
+// not in the row; list endpoints never ship file contents.
+const { query, one } = require("../core/db.js");
 
-const { getDB } = require("../db.js");
+const COLS = "id, type, name, company, email, phone, category, message, page, resume_file_name, resume_file_size, resume_mime, resume_storage_key, user_id, status, created_at, updated_at";
 
 function toPublicJSON(row) {
   if (!row) return null;
@@ -14,42 +14,40 @@ function toPublicJSON(row) {
     email: row.email,
     phone: row.phone,
     category: row.category,
-    message: row.message,
+    message: row.message || "",
     page: row.page,
     resumeFileName: row.resume_file_name,
     resumeFileSize: row.resume_file_size,
-    resumeDataUrl: row.resume_data_url,
+    // Authenticated download URL (was a base64 data URL in the SQLite version).
+    resumeUrl: row.resume_storage_key ? `/api/enquiries/${row.id}/resume` : "",
     status: row.status,
-    createdAt: row.created_at, // epoch ms — the admin dashboard sorts on this numerically
+    createdAt: new Date(row.created_at).getTime(), // epoch ms — dashboard sorts numerically
   };
 }
 
-function findAll({ limit = 2000 } = {}) {
-  const db = getDB();
-  return db.prepare("SELECT * FROM enquiries ORDER BY created_at DESC LIMIT ?").all(limit);
+async function list({ limit = 50, offset = 0, type, status, q } = {}) {
+  const where = ["deleted_at IS NULL"];
+  const p = {};
+  if (type) (where.push("type = :type"), (p.type = type));
+  if (status) (where.push("status = :status"), (p.status = status));
+  if (q) (where.push("(name LIKE :q OR email LIKE :q OR company LIKE :q)"), (p.q = `%${q}%`));
+  const w = where.join(" AND ");
+  const lim = Math.min(Math.max(Number(limit) || 50, 1), 2000);
+  const off = Math.max(Number(offset) || 0, 0);
+  const rows = await query(`SELECT ${COLS} FROM enquiries WHERE ${w} ORDER BY created_at DESC, id DESC LIMIT ${lim} OFFSET ${off}`, p);
+  const total = await one(`SELECT COUNT(*) AS c FROM enquiries WHERE ${w}`, p);
+  return { rows, total: Number(total.c) };
 }
 
-function findById(id) {
-  const db = getDB();
-  return db.prepare("SELECT * FROM enquiries WHERE id = ?").get(id);
-}
+const findById = (id) => one(`SELECT ${COLS} FROM enquiries WHERE id = :id AND deleted_at IS NULL`, { id });
 
-function create(data) {
-  const db = getDB();
-  const now = Date.now();
-  const info = db
-    .prepare(
-      `INSERT INTO enquiries (
-         type, name, company, email, phone, category, message, page,
-         resume_file_name, resume_file_size, resume_data_url, user_id,
-         status, created_at, updated_at
-       ) VALUES (
-         @type, @name, @company, @email, @phone, @category, @message, @page,
-         @resumeFileName, @resumeFileSize, @resumeDataUrl, @userId,
-         'new', @now, @now
-       )`
-    )
-    .run({
+async function create(data, conn = null) {
+  const res = await query(
+    `INSERT INTO enquiries (type, name, company, email, phone, category, message, page,
+       resume_file_name, resume_file_size, resume_mime, resume_storage_key, user_id)
+     VALUES (:type, :name, :company, :email, :phone, :category, :message, :page,
+       :resumeFileName, :resumeFileSize, :resumeMime, :resumeKey, :userId)`,
+    {
       type: data.type,
       name: data.name,
       company: data.company || "",
@@ -60,35 +58,34 @@ function create(data) {
       page: data.page || "",
       resumeFileName: data.resumeFileName || "",
       resumeFileSize: data.resumeFileSize || 0,
-      resumeDataUrl: data.resumeDataUrl || "",
+      resumeMime: data.resumeMime || "",
+      resumeKey: data.resumeStorageKey || null,
       userId: data.userId || null,
-      now,
-    });
-  return findById(info.lastInsertRowid);
+    },
+    conn
+  );
+  return findById(res.insertId);
 }
 
-function updateStatus(id, status) {
-  const db = getDB();
-  const info = db
-    .prepare("UPDATE enquiries SET status = ?, updated_at = ? WHERE id = ?")
-    .run(status, Date.now(), id);
-  return info.changes > 0 ? findById(id) : null;
+async function updateStatus(id, status) {
+  const res = await query("UPDATE enquiries SET status = :status WHERE id = :id AND deleted_at IS NULL", { id, status });
+  return res.affectedRows > 0 ? findById(id) : null;
 }
 
-function deleteById(id) {
-  const db = getDB();
-  const info = db.prepare("DELETE FROM enquiries WHERE id = ?").run(id);
-  return info.changes > 0;
+async function softDelete(id) {
+  const res = await query("UPDATE enquiries SET deleted_at = CURRENT_TIMESTAMP(3) WHERE id = :id AND deleted_at IS NULL", { id });
+  return res.affectedRows > 0;
 }
 
-function stats() {
-  const db = getDB();
-  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const total = db.prepare("SELECT COUNT(*) AS c FROM enquiries").get().c;
-  const newCount = db.prepare("SELECT COUNT(*) AS c FROM enquiries WHERE status = 'new'").get().c;
-  const thisWeek = db.prepare("SELECT COUNT(*) AS c FROM enquiries WHERE created_at >= ?").get(weekAgo).c;
-  const careers = db.prepare("SELECT COUNT(*) AS c FROM enquiries WHERE type = 'career'").get().c;
-  return { total, newCount, thisWeek, careers };
+async function stats() {
+  const r = await one(
+    `SELECT COUNT(*) AS total,
+            SUM(status = 'new') AS newCount,
+            SUM(created_at >= DATE_SUB(CURRENT_TIMESTAMP(3), INTERVAL 7 DAY)) AS thisWeek,
+            SUM(type = 'career') AS careers
+       FROM enquiries WHERE deleted_at IS NULL`
+  );
+  return { total: Number(r.total || 0), newCount: Number(r.newCount || 0), thisWeek: Number(r.thisWeek || 0), careers: Number(r.careers || 0) };
 }
 
-module.exports = { toPublicJSON, findAll, findById, create, updateStatus, deleteById, stats };
+module.exports = { toPublicJSON, list, findById, create, updateStatus, softDelete, stats };

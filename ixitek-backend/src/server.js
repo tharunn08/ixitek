@@ -1,56 +1,63 @@
-const path = require("path");
-
-// Load ixitek-backend/.env regardless of the process's current working
-// directory. This matters once the app is started from the repository
-// root (e.g. Hostinger running `npm start` at the repo root, or the root
-// package.json's own `start` script) — a bare `dotenv.config()` only ever
-// looks at `process.cwd()`, which would silently miss this file. On
-// Hostinger (and most Node.js hosts) real environment variables are
-// injected directly into process.env by the platform, so this .env file
-// is optional there; it's still loaded first for local/VPS use, and never
-// overrides a variable the platform already set.
-require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
-
-const { connectDB, disconnectDB } = require("./db.js");
+// server.js — process entry point (`npm start`).
+// Order: validate config → migrate schema → seed owner → start jobs &
+// backups → listen. Shuts down gracefully on SIGINT/SIGTERM.
+const { config, assertProductionSafe } = require("./core/config.js");
+const log = require("./core/logger.js");
+const db = require("./core/db.js");
+const { migrate } = require("./core/migrate.js");
+const jobs = require("./core/jobs.js");
 const { buildApp } = require("./app.js");
 const { seedOwner } = require("./utils/seed.js");
 const { scheduleBackups } = require("./utils/backup.js");
 
-// Hostinger (and most Node.js hosts) assign the port at runtime via
-// process.env.PORT and route the public domain to it — never hardcode a
-// production port. The 5000 fallback only kicks in for local development
-// when PORT isn't set.
-const PORT = process.env.PORT || 5000;
-
 async function start() {
-  connectDB();
-  await seedOwner().catch((err) => {
-    console.error("[server] Could not seed the owner account:", err.message);
-  });
+  const problems = assertProductionSafe();
+  if (problems.length) {
+    for (const p of problems) log.error(`[config] ${p}`);
+    if (config.isProd) process.exit(1);
+  }
+  for (const w of require("./core/config.js").productionWarnings()) log.warn(`[config] ${w}`);
 
-  const backupTimer = scheduleBackups();
+  if (process.env.AUTO_MIGRATE !== "false") await migrate();
+  await db.ping();
+  await require("./modules/commerce/orderService.js").refreshTables();
+  await seedOwner().catch((err) => log.error("[server] could not seed the owner account", { err }));
+
+  jobs.start();
+  require("./modules/intl/fxService.js").schedule();
+  if (process.env.JOBS_ENABLED !== "false") {
+    const scheduler = require("./core/scheduler.js");
+    scheduler.every("quotes.expiry", { periodHours: 24 });
+    scheduler.every("payments.reconcile", { periodHours: 0.25, checkMinutes: 5 });
+    // Weekly proof that backups restore (only when a scratch database is configured).
+    if (config.backups.restoreTestDb) scheduler.every("backup.restore_test", { periodHours: 24 * 7, checkMinutes: 60 });
+  }
+  process.on("unhandledRejection", (err) => require("./core/monitor.js").event("http_500", `Unhandled rejection: ${err && err.message}`, {}));
+  const backupTimer = process.env.BACKUPS_ENABLED === "false" ? null : scheduleBackups();
 
   const app = buildApp();
-  const server = app.listen(PORT, () => {
-    const mode = process.env.NODE_ENV === "production" ? "production" : "development";
-    console.log(`[server] Ixitek app (frontend + API) listening on port ${PORT} [${mode}]`);
+  const server = app.listen(config.port, () => {
+    log.info(`[server] IXITEK app (frontend + API) listening on port ${config.port} [${config.isProd ? "production" : "development"}]`);
   });
 
   const shutdown = (signal) => {
-    console.log(`\n[server] Received ${signal}, shutting down gracefully...`);
-    clearInterval(backupTimer);
-    server.close(() => {
-      // Close the database last, after the HTTP server has stopped taking
-      // new requests, so nothing writes to it mid-shutdown.
-      disconnectDB();
+    log.info(`[server] ${signal} received, shutting down gracefully`);
+    jobs.stop();
+    if (backupTimer) clearInterval(backupTimer);
+    require("./core/scheduler.js").stopAll();
+    server.close(async () => {
+      await db.close().catch(() => {});
       process.exit(0);
     });
+    setTimeout(() => process.exit(1), 15000).unref();
   };
   process.on("SIGINT", () => shutdown("SIGINT"));
   process.on("SIGTERM", () => shutdown("SIGTERM"));
 }
 
+process.on("unhandledRejection", (err) => log.error("unhandledRejection", { err }));
+
 start().catch((err) => {
-  console.error("[server] Fatal startup error:", err);
+  log.error("[server] fatal startup error", { err });
   process.exit(1);
 });

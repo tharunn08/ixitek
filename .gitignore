@@ -23,3 +23,8 @@ dist-ssr/
 logs
 *.log
 npm-debug.log*
+
+# Confidential supplier data — never commit catalog workbooks (they contain costs).
+*.xlsx
+*.xls
+ixitek-backend/test/fixtures/

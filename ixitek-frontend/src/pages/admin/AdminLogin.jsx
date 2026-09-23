@@ -71,7 +71,7 @@ export default function AdminLogin({ initialMode = "signin" }) {
   }
 
   function redirectAfterAuth(session) {
-    if (isAdminRole(session?.role)) {
+    if (isAdminRole(session?.role, session?.permissions)) {
       navigate(redirectFrom || "/admin", { replace: true });
     } else {
       navigate(redirectFrom || "/", { replace: true });
@@ -95,7 +95,7 @@ export default function AdminLogin({ initialMode = "signin" }) {
     const next = {};
     if (!signupForm.name.trim()) next.name = "Enter your name.";
     if (!signupForm.email.trim() || !EMAIL_RE.test(signupForm.email.trim())) next.email = "Enter a valid email address.";
-    if (!signupForm.password || signupForm.password.length < 6) next.password = "At least 6 characters.";
+    if (!signupForm.password || signupForm.password.length < 8 || !/[A-Za-z]/.test(signupForm.password) || !/[0-9]/.test(signupForm.password)) next.password = "At least 8 characters, with a letter and a number.";
     if (signupForm.confirmPassword !== signupForm.password) next.confirmPassword = "Passwords don't match.";
     setFieldErrors(next);
     return Object.keys(next).length === 0;
@@ -342,7 +342,7 @@ export default function AdminLogin({ initialMode = "signin" }) {
                     icon="Lock"
                     label="Password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="At least 6 characters"
+                    placeholder="At least 8 characters, incl. a number"
                     value={signupForm.password}
                     onChange={(v) => updateSignup("password", v)}
                     error={fieldErrors.password}

@@ -1,14 +1,14 @@
-// User.js — everyone who can sign in from the site's login page: regular
-// website visitors who create an account ("customer"), teammates given
-// access to the admin panel ("staff"), and the site owner / primary
-// administrator ("owner"). One table (with a `role` column) rather than
-// three, so the admin panel can list "everyone who has ever signed up"
-// with a single query while still being able to filter by role.
-
+// User model — MySQL. Same public JSON shape as the SQLite version so the
+// existing frontend keeps working; adds `permissions` where useful.
 const bcrypt = require("bcryptjs");
-const { getDB } = require("../db.js");
+const { query, one } = require("../core/db.js");
 
 const SALT_ROUNDS = 12;
+const COLS = "id, name, email, phone, company, password_hash, role, customer_group, company_id, company_role, status, failed_login_count, locked_until, last_login_at, last_login_ip, preferred_country, preferred_currency, preferred_language, created_by, created_at, updated_at";
+
+function iso(d) {
+  return d ? new Date(d).toISOString() : null;
+}
 
 function toPublicJSON(row) {
   if (!row) return null;
@@ -19,81 +19,86 @@ function toPublicJSON(row) {
     phone: row.phone,
     company: row.company,
     role: row.role,
+    customerGroup: row.customer_group,
+    companyId: row.company_id ? String(row.company_id) : null,
+    companyRole: row.company_role || null,
+    preferences: { country: row.preferred_country || null, currency: row.preferred_currency || null, language: row.preferred_language || null },
     status: row.status,
-    createdAt: new Date(row.created_at).toISOString(),
-    lastLoginAt: row.last_login_at ? new Date(row.last_login_at).toISOString() : null,
+    createdAt: iso(row.created_at),
+    lastLoginAt: iso(row.last_login_at),
   };
 }
 
-function hashPassword(plainPassword) {
-  return bcrypt.hash(plainPassword, SALT_ROUNDS);
-}
+const hashPassword = (plain) => bcrypt.hash(plain, SALT_ROUNDS);
+const comparePassword = (plain, hash) => bcrypt.compare(plain, hash);
 
-function comparePassword(plainPassword, passwordHash) {
-  return bcrypt.compare(plainPassword, passwordHash);
-}
+const findByEmail = (email) =>
+  one(`SELECT ${COLS} FROM users WHERE email = :email AND deleted_at IS NULL`, { email: (email || "").trim().toLowerCase() });
 
-function findByEmail(email) {
-  const db = getDB();
-  return db.prepare("SELECT * FROM users WHERE email = ?").get((email || "").trim().toLowerCase());
-}
-
-function findById(id) {
-  const db = getDB();
-  return db.prepare("SELECT * FROM users WHERE id = ?").get(id);
-}
+const findById = (id) => one(`SELECT ${COLS} FROM users WHERE id = :id AND deleted_at IS NULL`, { id });
 
 function findAllByRole(role) {
-  const db = getDB();
-  return db.prepare("SELECT * FROM users WHERE role = ? ORDER BY created_at DESC").all(role);
+  return query(`SELECT ${COLS} FROM users WHERE role = :role AND deleted_at IS NULL ORDER BY created_at DESC`, { role });
 }
 
-async function create({ name, email, phone = "", company = "", password, role = "customer", createdBy = null }) {
-  const db = getDB();
-  const passwordHash = await hashPassword(password);
-  const now = Date.now();
-  const info = db
-    .prepare(
-      `INSERT INTO users (name, email, phone, company, password_hash, role, created_by, created_at, updated_at)
-       VALUES (@name, @email, @phone, @company, @passwordHash, @role, @createdBy, @now, @now)`
-    )
-    .run({
-      name: name.trim(),
-      email: email.trim().toLowerCase(),
-      phone: phone.trim(),
-      company: company.trim(),
-      passwordHash,
-      role,
-      createdBy,
-      now,
-    });
-  return findById(info.lastInsertRowid);
-}
-
-function recordLogin(id, ip) {
-  const db = getDB();
-  db.prepare("UPDATE users SET last_login_at = ?, last_login_ip = ?, updated_at = ? WHERE id = ?").run(
-    Date.now(),
-    ip || "",
-    Date.now(),
-    id
+function findStaff() {
+  return query(
+    `SELECT ${COLS.split(", ").map((c) => "u." + c).join(", ")} FROM users u JOIN roles r ON r.code = u.role
+      WHERE r.is_staff = 1 AND u.role <> 'owner' AND u.deleted_at IS NULL ORDER BY u.created_at DESC`
   );
 }
 
-function setRole(id, role) {
-  const db = getDB();
-  db.prepare("UPDATE users SET role = ?, updated_at = ? WHERE id = ?").run(role, Date.now(), id);
+async function countByRole(role) {
+  const r = await one("SELECT COUNT(*) AS c FROM users WHERE role = :role AND deleted_at IS NULL", { role });
+  return Number(r.c);
 }
 
-function deleteById(id, role) {
-  const db = getDB();
-  // `role` guard avoids accidentally deleting an owner/customer account
-  // through a route that's only meant to remove staff.
-  const stmt = role
-    ? db.prepare("DELETE FROM users WHERE id = ? AND role = ?")
-    : db.prepare("DELETE FROM users WHERE id = ?");
-  const info = role ? stmt.run(id, role) : stmt.run(id);
-  return info.changes > 0;
+async function create({ name, email, phone = "", company = "", password, role = "customer", createdBy = null }, conn = null) {
+  const passwordHash = await hashPassword(password);
+  const res = await query(
+    `INSERT INTO users (name, email, phone, company, password_hash, role, created_by, password_changed_at)
+     VALUES (:name, :email, :phone, :company, :passwordHash, :role, :createdBy, CURRENT_TIMESTAMP(3))`,
+    {
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      phone: (phone || "").trim(),
+      company: (company || "").trim(),
+      passwordHash,
+      role,
+      createdBy,
+    },
+    conn
+  );
+  return findById(res.insertId);
+}
+
+function recordLogin(id, ip) {
+  return query(
+    "UPDATE users SET last_login_at = CURRENT_TIMESTAMP(3), last_login_ip = :ip, failed_login_count = 0, locked_until = NULL WHERE id = :id",
+    { id, ip: ip || "" }
+  );
+}
+
+function recordFailedLogin(id, maxFailed, lockMinutes) {
+  return query(
+    `UPDATE users SET failed_login_count = failed_login_count + 1,
+       locked_until = IF(failed_login_count + 1 >= :maxFailed, DATE_ADD(CURRENT_TIMESTAMP(3), INTERVAL :lock MINUTE), locked_until)
+     WHERE id = :id`,
+    { id, maxFailed, lock: lockMinutes }
+  );
+}
+
+const setRole = (id, role) => query("UPDATE users SET role = :role WHERE id = :id", { id, role });
+
+/** Soft delete (keeps history, frees nothing). */
+async function softDelete(id, { role } = {}) {
+  const res = await query(
+    `UPDATE users SET deleted_at = CURRENT_TIMESTAMP(3), status = 'disabled',
+       email = CONCAT('deleted+', id, '+', email)
+     WHERE id = :id AND deleted_at IS NULL ${role ? "AND role = :role" : ""}`,
+    { id, role: role || null }
+  );
+  return res.affectedRows > 0;
 }
 
 module.exports = {
@@ -103,8 +108,11 @@ module.exports = {
   findByEmail,
   findById,
   findAllByRole,
+  findStaff,
+  countByRole,
   create,
   recordLogin,
+  recordFailedLogin,
   setRole,
-  deleteById,
+  softDelete,
 };

@@ -1,0 +1,57 @@
+# CI: install → backend tests (incl. payments stub, email SMTP, backup+restore) against real MySQL 8 AND MariaDB 10.11 → frontend lint + build.
+# Runs on every push and pull request; deployment stays with Hostinger's
+# GitHub integration (it builds from `main`).
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Hostinger shared/cloud hosting typically provides MariaDB; VPS/managed may be MySQL 8.
+          - db_image: mysql:8.0
+            health: mysqladmin ping -h 127.0.0.1 -proot
+          - db_image: mariadb:10.11
+            health: healthcheck.sh --connect --innodb_initialized
+    services:
+      mysql:
+        image: ${{ matrix.db_image }}
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: ixitek_test
+          MYSQL_USER: ixitek
+          MYSQL_PASSWORD: ixitek
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="${{ matrix.health }}"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: ixitek
+      DB_PASSWORD: ixitek
+      DB_NAME_TEST: ixitek_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install backend
+        run: npm ci --prefix ixitek-backend
+      - name: Create restore-test database (backup restore is verified in tests)
+        run: |
+          docker exec ${{ job.services.mysql.id }} sh -c 'command -v mysql >/dev/null && M=mysql || M=mariadb; $M -uroot -proot -e "CREATE DATABASE IF NOT EXISTS ixitek_restore_test; GRANT ALL ON ixitek_restore_test.* TO \"ixitek\"@\"%\";"'
+      - name: Backend tests
+        run: npm test --prefix ixitek-backend
+      - name: Install frontend
+        run: npm ci --prefix ixitek-frontend --include=dev
+      - name: Lint frontend
+        run: npm run lint --prefix ixitek-frontend
+      - name: Build frontend
+        run: npm run build --prefix ixitek-frontend

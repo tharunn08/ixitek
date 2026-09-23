@@ -7,6 +7,7 @@ import StatCard from "../../components/admin/StatCard.jsx";
 import EnquiryDetailDrawer from "../../components/admin/EnquiryDetailDrawer.jsx";
 import StaffManager from "../../components/admin/StaffManager.jsx";
 import { useAdminAuth } from "../../context/AdminAuthContext.jsx";
+import { hasPermission } from "../../lib/adminAuth.js";
 import {
   getEnquiries,
   loadEnquiries,
@@ -110,7 +111,7 @@ export default function AdminDashboard() {
   const [selected, setSelected] = useState(null);
   const [teamOpen, setTeamOpen] = useState(false);
   const [loadErr, setLoadErr] = useState("");
-  const isOwner = session?.role !== "staff";
+  const isOwner = hasPermission(session, "staff.manage");
 
   useEffect(() => {
     const unsubEnquiries = subscribeToEnquiries(setRecords);
@@ -195,6 +196,24 @@ export default function AdminDashboard() {
             </span>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
+            {hasPermission(session, "orders.read") && (
+              <Link
+                to="/admin/orders"
+                className="focus-ring inline-flex items-center gap-1.5 rounded-full bg-brand-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-700"
+              >
+                <Icon name="ShoppingCart" className="h-3.5 w-3.5" />
+                Orders &amp; operations
+              </Link>
+            )}
+            {hasPermission(session, "catalog.read") && (
+              <Link
+                to="/admin/catalog/products"
+                className="focus-ring inline-flex items-center gap-1.5 rounded-full bg-brand-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-700"
+              >
+                <Icon name="Package" className="h-3.5 w-3.5" />
+                Catalog, pricing &amp; stock
+              </Link>
+            )}
             {isOwner && (
               <button
                 onClick={() => setTeamOpen(true)}

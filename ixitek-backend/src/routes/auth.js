@@ -1,93 +1,105 @@
-// routes/auth.js — the single login page on the frontend talks to these
-// two endpoints: POST /register (Create account — customers only) and
-// POST /login (Sign in — works for customers, staff and the owner/admin;
-// the frontend redirects based on the `role` returned in the response).
-
+// /api/auth — register, login, logout, me. Response shapes match the
+// previous SQLite version ({ user }) plus `csrfToken` and `permissions`.
 const express = require("express");
 const rateLimit = require("express-rate-limit");
 const User = require("../models/User.js");
-const { signToken, requireAuth } = require("../middleware/auth.js");
+const { issueSession, clearSession, requireAuth } = require("../middleware/auth.js");
+const { permissionsFor } = require("../core/rbac.js");
+const { config } = require("../core/config.js");
+const audit = require("../core/audit.js");
+const { ah, badRequest, conflict, unauthorized, AppError } = require("../core/errors.js");
 
 const router = express.Router();
-
-const EMAIL_RE = /^\S+@\S+\.\S+$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Too many sign-in attempts. Please wait a few minutes and try again." },
+  message: { error: "Too many sign-in attempts. Please wait a few minutes and try again.", code: "RATE_LIMITED" },
 });
+const registerLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false });
 
-// ── POST /api/auth/register — create a customer account ────────────────
-router.post("/register", async (req, res) => {
-  try {
-    const name = (req.body.name || "").trim();
-    const email = (req.body.email || "").trim().toLowerCase();
-    const phone = (req.body.phone || "").trim();
-    const company = (req.body.company || "").trim();
-    const password = req.body.password || "";
+function validatePassword(pw) {
+  if (!pw || pw.length < 8) return "Password must be at least 8 characters.";
+  if (pw.length > 200) return "Password is too long.";
+  if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) return "Use at least one letter and one number.";
+  return null;
+}
 
-    if (!name) return res.status(400).json({ error: "Please enter your name." });
-    if (!email || !EMAIL_RE.test(email)) return res.status(400).json({ error: "Enter a valid email address." });
-    if (!password || password.length < 6) {
-      return res.status(400).json({ error: "Password must be at least 6 characters." });
+async function sessionPayload(res, user, remember) {
+  const { csrf } = issueSession(res, user, { remember });
+  const permissions = [...(await permissionsFor(user.role))].sort();
+  return { user: User.toPublicJSON(user), permissions, csrfToken: csrf };
+}
+
+router.post(
+  "/register",
+  registerLimiter,
+  ah(async (req, res) => {
+    const name = String(req.body.name || "").trim();
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const phone = String(req.body.phone || "").trim();
+    const company = String(req.body.company || "").trim();
+    const password = String(req.body.password || "");
+
+    if (!name) throw badRequest("Please enter your name.");
+    if (!email || !EMAIL_RE.test(email) || email.length > 254) throw badRequest("Enter a valid email address.");
+    const pwErr = validatePassword(password);
+    if (pwErr) throw badRequest(pwErr);
+    if (await User.findByEmail(email)) throw conflict("An account with this email already exists. Try signing in instead.");
+
+    let user;
+    try {
+      user = await User.create({ name, email, phone, company, password, role: "customer" });
+    } catch (err) {
+      if (err.code === "ER_DUP_ENTRY") throw conflict("An account with this email already exists. Try signing in instead.");
+      throw err;
     }
+    await audit.record({ req, actorId: user.id, actorEmail: user.email, action: "user.register", entityType: "user", entityId: user.id });
+    res.status(201).json(await sessionPayload(res, user, true));
+  })
+);
 
-    const existing = User.findByEmail(email);
-    if (existing) {
-      return res.status(409).json({ error: "An account with this email already exists. Try signing in instead." });
-    }
-
-    const user = await User.create({ name, email, phone, company, password, role: "customer" });
-
-    const token = signToken(user, { remember: true });
-    return res.status(201).json({ token, user: User.toPublicJSON(user) });
-  } catch (err) {
-    if (String(err.message || "").includes("UNIQUE constraint failed")) {
-      return res.status(409).json({ error: "An account with this email already exists. Try signing in instead." });
-    }
-    console.error("[auth/register]", err);
-    return res.status(500).json({ error: "Could not create your account right now. Please try again." });
-  }
-});
-
-// ── POST /api/auth/login — sign in as customer, staff or owner ─────────
-router.post("/login", loginLimiter, async (req, res) => {
-  try {
-    const identifier = (req.body.identifier ?? req.body.email ?? req.body.username ?? "").trim().toLowerCase();
-    const password = req.body.password || "";
+router.post(
+  "/login",
+  loginLimiter,
+  ah(async (req, res) => {
+    const identifier = String(req.body.identifier ?? req.body.email ?? req.body.username ?? "").trim().toLowerCase();
+    const password = String(req.body.password || "");
     const remember = Boolean(req.body.remember);
+    if (!identifier || !password) throw badRequest("Enter your email/username and password.");
 
-    if (!identifier || !password) {
-      return res.status(400).json({ error: "Enter your email/username and password." });
+    const generic = unauthorized("The email/username or password you entered is incorrect.");
+    const user = await User.findByEmail(identifier);
+    if (!user || user.status !== "active") throw generic;
+    if (user.locked_until && new Date(user.locked_until) > new Date()) {
+      throw new AppError(423, "LOCKED", `Too many failed attempts. Try again in about ${config.auth.lockMinutes} minutes.`);
     }
-
-    const user = User.findByEmail(identifier);
-    if (!user || user.status !== "active") {
-      return res.status(401).json({ error: "The email/username or password you entered is incorrect." });
+    if (!(await User.comparePassword(password, user.password_hash))) {
+      await User.recordFailedLogin(user.id, config.auth.maxFailedLogins, config.auth.lockMinutes);
+      await audit.record({ req, actorId: null, actorEmail: identifier, action: "auth.login_failed", entityType: "user", entityId: user.id });
+      throw generic;
     }
+    await User.recordLogin(user.id, req.ip);
+    const fresh = await User.findById(user.id);
+    res.json(await sessionPayload(res, fresh, remember));
+  })
+);
 
-    const ok = await User.comparePassword(password, user.password_hash);
-    if (!ok) {
-      return res.status(401).json({ error: "The email/username or password you entered is incorrect." });
-    }
-
-    User.recordLogin(user.id, req.ip);
-    const refreshed = User.findById(user.id);
-
-    const token = signToken(refreshed, { remember });
-    return res.json({ token, user: User.toPublicJSON(refreshed) });
-  } catch (err) {
-    console.error("[auth/login]", err);
-    return res.status(500).json({ error: "Sign-in failed. Please try again." });
-  }
+router.post("/logout", (req, res) => {
+  clearSession(res);
+  res.json({ ok: true });
 });
 
-// ── GET /api/auth/me — current session's user ───────────────────────────
-router.get("/me", requireAuth, (req, res) => {
-  res.json({ user: User.toPublicJSON(req.user) });
-});
+router.get(
+  "/me",
+  requireAuth,
+  ah(async (req, res) => {
+    const permissions = [...(await permissionsFor(req.user.role))].sort();
+    res.json({ user: User.toPublicJSON(req.user), permissions });
+  })
+);
 
 module.exports = router;

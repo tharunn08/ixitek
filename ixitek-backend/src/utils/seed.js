@@ -1,38 +1,44 @@
-// utils/seed.js — creates the single "owner" account from environment
-// variables the first time the server runs against a fresh database.
-// Idempotent — safe to run on every server start — and can also be run by
-// hand with `npm run seed`.
-
-require("dotenv").config();
-const { connectDB, disconnectDB } = require("../db.js");
+// seed.js — ensures the owner account exists (first start / fresh DB).
+// Production: OWNER_EMAIL + OWNER_PASSWORD must be set, otherwise seeding is
+// skipped with a warning (no published default password is ever used).
+// Development: a random password is generated and printed once.
+const crypto = require("crypto");
+const { config } = require("../core/config.js");
 const User = require("../models/User.js");
+const log = require("../core/logger.js");
 
 async function seedOwner() {
-  const email = (process.env.OWNER_EMAIL || "admin@ixitek.in").trim().toLowerCase();
-  const name = process.env.OWNER_NAME || "Ixitek Admin";
-  const password = process.env.OWNER_PASSWORD || "Ixitek@2026";
-
-  let owner = User.findByEmail(email);
-  if (owner) {
-    console.log(`[seed] Owner account already exists (${email}) — leaving password unchanged.`);
-    if (owner.role !== "owner") {
-      User.setRole(owner.id, "owner");
-      console.log("[seed] Promoted existing account to role=owner.");
-    }
-    return owner;
+  const email = config.owner.email || (config.isProd ? "" : "admin@ixitek.in");
+  if (!email) {
+    log.warn("[seed] OWNER_EMAIL not set — owner account not seeded.");
+    return null;
   }
-
-  owner = await User.create({ name, email, password, role: "owner" });
-  console.log(`[seed] Created owner account → email: ${email}${process.env.OWNER_PASSWORD ? "" : " (default password — change this!)"}`);
+  const existing = await User.findByEmail(email);
+  if (existing) {
+    if (existing.role !== "owner") {
+      await User.setRole(existing.id, "owner");
+      log.info("[seed] Promoted existing account to role=owner.", { email });
+    }
+    return existing;
+  }
+  let password = config.owner.password;
+  if (!password) {
+    if (config.isProd) {
+      log.warn("[seed] OWNER_PASSWORD not set — owner account not seeded.");
+      return null;
+    }
+    password = crypto.randomBytes(9).toString("base64url");
+    log.warn(`[seed] Development owner password generated: ${email} / ${password} — set OWNER_PASSWORD to choose one.`);
+  }
+  const owner = await User.create({ name: config.owner.name, email, password, role: "owner" });
+  log.info("[seed] Created owner account", { email });
   return owner;
 }
 
-// Only auto-run standalone (via `npm run seed`); server.js imports and
-// calls seedOwner() itself after connecting.
 if (require.main === module) {
-  connectDB();
+  const db = require("../core/db.js");
   seedOwner()
-    .then(() => disconnectDB())
+    .then(() => db.close())
     .then(() => process.exit(0))
     .catch((err) => {
       console.error(err);

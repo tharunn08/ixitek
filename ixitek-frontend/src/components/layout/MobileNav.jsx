@@ -1,9 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "../../lib/icons.jsx";
 import { categories, getFamiliesForCategory } from "../../data/products.js";
 import { useAdminAuth } from "../../context/AdminAuthContext.jsx";
+import LocaleSelector from "../intl/LocaleSelector.jsx";
+import { getMenu } from "../../lib/catalogApi.js";
+
+const hubLinks = [
+  { to: "/solutions", label: "Solutions", icon: "Layers" },
+  { to: "/services", label: "Services", icon: "Wrench" },
+  { to: "/resources", label: "Resources", icon: "BookOpen" },
+  { to: "/support", label: "Help & support", icon: "LifeBuoy" },
+  { to: "/quick-order", label: "Quick order / BOM upload", icon: "ListChecks" },
+  { to: "/track-order", label: "Track order", icon: "Truck" },
+  { to: "/cart", label: "Cart", icon: "ShoppingCart" },
+];
 
 const whoWeAreItems = [
   { label: "Company", to: "/company", icon: "Building2", description: "Our story, process & values" },
@@ -13,6 +25,11 @@ const whoWeAreItems = [
 export default function MobileNav({ open, onClose }) {
   const [expanded, setExpanded] = useState(null);
   const { session, isAuthenticated, isAdmin, logout } = useAdminAuth();
+  // Live catalog replaces the old static "Fiber Optics" group (same as the desktop mega menu).
+  const [catalog, setCatalog] = useState(null);
+  useEffect(() => {
+    getMenu().then((m) => setCatalog(m?.categories?.length ? m.categories : null)).catch(() => {});
+  }, []);
 
   return (
     <AnimatePresence>
@@ -45,6 +62,10 @@ export default function MobileNav({ open, onClose }) {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-4">
+              <div className="mb-3 flex items-center justify-between rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-600">
+                <span>Ship to</span>
+                <LocaleSelector />
+              </div>
               <div className="flex flex-col gap-1">
                 <div className="border-b border-ink-100 py-2">
                   <button
@@ -83,7 +104,16 @@ export default function MobileNav({ open, onClose }) {
                   </AnimatePresence>
                 </div>
                 {categories.map((cat) => {
-                  const fams = getFamiliesForCategory(cat.slug);
+                  const live = cat.slug === "fiber-optics" && catalog;
+                  const fams = live
+                    ? catalog.flatMap((c) =>
+                        c.children.length
+                          ? c.children.map((k) => ({ id: k.slug, name: k.name, to: `/catalog/${k.slug}` }))
+                          : [{ id: c.slug, name: `${c.name}${c.totalProducts ? "" : " (coming soon)"}`, to: `/catalog/${c.slug}` }]
+                      )
+                    : getFamiliesForCategory(cat.slug).map((f) => ({ ...f, to: `/products/${cat.slug}/${f.slug}` }));
+                  const title = live ? catalog[0].name : cat.name;
+                  const viewAll = live ? `/catalog/${catalog[0].slug}` : `/products/${cat.slug}`;
                   const isOpen = expanded === cat.id;
                   return (
                     <div key={cat.id} className="border-b border-ink-100 py-2">
@@ -93,7 +123,7 @@ export default function MobileNav({ open, onClose }) {
                       >
                         <span className="flex items-center gap-2.5 font-display text-sm font-bold text-ink-900">
                           <Icon name={cat.icon} className="h-4 w-4 text-brand-600" />
-                          {cat.name}
+                          {title}
                         </span>
                         <Icon
                           name="ChevronDown"
@@ -110,17 +140,17 @@ export default function MobileNav({ open, onClose }) {
                           >
                             <li className="py-1.5">
                               <Link
-                                to={`/products/${cat.slug}`}
+                                to={viewAll}
                                 onClick={onClose}
                                 className="text-sm font-semibold text-brand-600"
                               >
-                                View all {cat.name}
+                                View all {title}
                               </Link>
                             </li>
                             {fams.map((f) => (
                               <li key={f.id} className="py-1.5">
                                 <Link
-                                  to={`/products/${cat.slug}/${f.slug}`}
+                                  to={f.to}
                                   onClick={onClose}
                                   className="text-sm text-ink-500"
                                 >
@@ -149,6 +179,19 @@ export default function MobileNav({ open, onClose }) {
               </div>
               <div className="mt-4 flex flex-col gap-1">
                 <Link
+                  to="/catalog"
+                  onClick={onClose}
+                  className="flex items-center justify-between rounded-xl bg-brand-600 px-4 py-3 text-base font-semibold text-white"
+                >
+                  Product catalog
+                  <Icon name="ArrowRight" className="h-4 w-4" />
+                </Link>
+                {hubLinks.map((l) => (
+                  <Link key={l.to} to={l.to} onClick={onClose} className="focus-ring flex items-center gap-2 rounded-md py-2.5 text-sm font-semibold text-ink-700">
+                    <Icon name={l.icon} className="h-4 w-4 text-brand-600" /> {l.label}
+                  </Link>
+                ))}
+                <Link
                   to="/career"
                   onClick={onClose}
                   className="focus-ring rounded-md py-2.5 text-sm font-semibold text-ink-700"
@@ -165,12 +208,12 @@ export default function MobileNav({ open, onClose }) {
                 {isAuthenticated ? (
                   <>
                     <Link
-                      to={isAdmin ? "/admin" : "/"}
+                      to={isAdmin ? "/admin" : "/account"}
                       onClick={onClose}
                       className="focus-ring flex items-center gap-2 rounded-md py-2.5 text-sm font-semibold text-ink-700"
                     >
                       <Icon name="User" className="h-4 w-4" />
-                      {isAdmin ? "Admin dashboard" : `Hi, ${session?.name?.split(" ")[0] || "there"}`}
+                      {isAdmin ? "Admin dashboard" : `My account (${session?.name?.split(" ")[0] || "you"})`}
                     </Link>
                     <button
                       onClick={() => {
@@ -197,11 +240,11 @@ export default function MobileNav({ open, onClose }) {
             </div>
             <div className="border-t border-ink-100 p-5">
               <Link
-                to="/contact"
+                to="/rfq"
                 onClick={onClose}
                 className="focus-ring flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 px-5 py-3.5 text-base font-semibold text-white hover:bg-brand-700"
               >
-                Get a quote
+                Request a Quote
                 <Icon name="ArrowRight" className="h-5 w-5" />
               </Link>
             </div>

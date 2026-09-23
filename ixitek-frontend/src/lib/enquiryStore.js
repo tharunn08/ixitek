@@ -33,10 +33,6 @@ export async function loadEnquiries() {
 export async function addEnquiry(data) {
   const { record } = await apiFetch("/api/enquiries", {
     method: "POST",
-    // Send the auth token if the visitor happens to be signed in (so the
-    // admin panel can later link the enquiry to their account), but don't
-    // require it — anonymous visitors can still submit the form.
-    auth: true,
     body: data,
   });
   return record;
