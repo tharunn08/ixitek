@@ -35,7 +35,12 @@ const config = {
     password: env.DB_PASSWORD || "",
     database: env.DB_NAME || "",
     connectionLimit: int(env.DB_POOL_SIZE, 10),
-    ssl: bool(env.DB_SSL) ? { rejectUnauthorized: bool(env.DB_SSL_REJECT_UNAUTHORIZED, true) } : undefined,
+    ssl: bool(env.DB_SSL)
+  ? {
+      rejectUnauthorized: bool(env.DB_SSL_REJECT_UNAUTHORIZED, true),
+      ...(env.DB_SSL_CA ? { ca: env.DB_SSL_CA } : {}),
+    }
+  : undefined,
     slowQueryMs: int(env.DB_SLOW_QUERY_MS, 500),
   },
 
