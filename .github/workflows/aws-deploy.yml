@@ -9,6 +9,7 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write
 
 concurrency:
   group: ixitek-production
@@ -16,6 +17,8 @@ concurrency:
 
 env:
   IMAGE_NAME: ghcr.io/tharunn08/ixitek
+  EC2_INSTANCE_ID: i-032a55578ef6d0f83
+  AWS_REGION: ap-southeast-2
   EC2_APP_ROOT: /home/ec2-user/ixitek-config
   EC2_DATA_ROOT: /home/ec2-user/ixitek-data
   NGINX_UPSTREAM_FILE: /etc/nginx/conf.d/ixitek-upstream.conf
@@ -24,9 +27,11 @@ env:
   GREEN_PORT: 5002
 
 jobs:
+
   # ============================================================
   # 1. TEST
   # ============================================================
+
   test:
     name: Test application
     runs-on: ubuntu-latest
@@ -41,13 +46,16 @@ jobs:
     services:
       mysql:
         image: ${{ matrix.db_image }}
+
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: ixitek_test
           MYSQL_USER: ixitek
           MYSQL_PASSWORD: ixitek
+
         ports:
           - 3306:3306
+
         options: >-
           --health-cmd="sh -c
           'if command -v mysqladmin >/dev/null 2>&1;
@@ -68,6 +76,7 @@ jobs:
       DB_NAME_TEST: ixitek_test
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v6
 
@@ -110,15 +119,18 @@ jobs:
       - name: Build frontend
         run: npm run build --prefix ixitek-frontend
 
+
   # ============================================================
   # 2. BUILD + SECURITY SCAN + PUSH
   # ============================================================
+
   build:
     name: Build, scan and publish image
     runs-on: ubuntu-latest
     needs: test
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v6
 
@@ -157,9 +169,11 @@ jobs:
 
           docker push ${{ env.IMAGE_NAME }}:latest
 
+
   # ============================================================
   # 3. BLUE/GREEN PRODUCTION DEPLOYMENT
   # ============================================================
+
   deploy:
     name: Blue/Green production deployment
     runs-on: ubuntu-latest
@@ -169,32 +183,43 @@ jobs:
       name: production
       url: https://aws.ixitek.com
 
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+
     steps:
-      - name: Configure SSH
-        uses: webfactory/ssh-agent@v0.9.1
+
+      # --------------------------------------------------------
+      # AWS OIDC
+      # --------------------------------------------------------
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.3.0
         with:
-          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: IxitekProductionDeployment
 
-      - name: Add EC2 host to known_hosts
+      - name: Verify AWS identity
         run: |
-          mkdir -p ~/.ssh
+          aws sts get-caller-identity
 
-          ssh-keyscan -H \
-            "${{ secrets.EC2_HOST }}" \
-            >> ~/.ssh/known_hosts
+      # --------------------------------------------------------
+      # Prepare deployment script
+      # --------------------------------------------------------
 
-      - name: Deploy immutable image with blue/green strategy
+      - name: Create deployment script
         env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USER: ${{ secrets.EC2_USER }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           IMAGE: ${{ env.IMAGE_NAME }}:${{ github.sha }}
         run: |
-          ssh "${EC2_USER}@${EC2_HOST}" \
-            "GHCR_USERNAME='${GHCR_USERNAME}' GHCR_TOKEN='${GHCR_TOKEN}' IMAGE='${IMAGE}' bash -s" <<'REMOTE_SCRIPT'
+
+          cat > /tmp/ixitek-deploy.sh <<'REMOTE_SCRIPT'
+          #!/usr/bin/env bash
 
           set -Eeuo pipefail
+
+          IMAGE="__IXITEK_IMAGE__"
 
           echo "========================================"
           echo "IXITEK PRODUCTION DEPLOYMENT"
@@ -203,6 +228,31 @@ jobs:
           echo
           echo "Image:"
           echo "$IMAGE"
+
+          # ------------------------------------------------------
+          # Load GHCR credentials from EC2
+          # ------------------------------------------------------
+
+          GHCR_ENV="/home/ec2-user/ixitek-config/ghcr.env"
+
+          if [[ ! -f "$GHCR_ENV" ]]; then
+            echo "ERROR: GHCR credential file not found:"
+            echo "$GHCR_ENV"
+            exit 1
+          fi
+
+          # shellcheck disable=SC1090
+          source "$GHCR_ENV"
+
+          if [[ -z "${GHCR_USERNAME:-}" ]]; then
+            echo "ERROR: GHCR_USERNAME is missing."
+            exit 1
+          fi
+
+          if [[ -z "${GHCR_TOKEN:-}" ]]; then
+            echo "ERROR: GHCR_TOKEN is missing."
+            exit 1
+          fi
 
           # ------------------------------------------------------
           # Determine currently active environment
@@ -218,6 +268,7 @@ jobs:
           ' /etc/nginx/conf.d/ixitek-upstream.conf)"
 
           if [[ "$CURRENT_PORT" == "5001" ]]; then
+
             ACTIVE_ENV="blue"
             ACTIVE_CONTAINER="ixitek-blue"
             ACTIVE_PORT="5001"
@@ -227,6 +278,7 @@ jobs:
             TARGET_PORT="5002"
 
           elif [[ "$CURRENT_PORT" == "5002" ]]; then
+
             ACTIVE_ENV="green"
             ACTIVE_CONTAINER="ixitek-green"
             ACTIVE_PORT="5002"
@@ -236,14 +288,17 @@ jobs:
             TARGET_PORT="5001"
 
           else
+
             echo "ERROR: Unknown active port: $CURRENT_PORT"
             exit 1
+
           fi
 
           echo
           echo "Current environment : $ACTIVE_ENV"
           echo "Current container   : $ACTIVE_CONTAINER"
           echo "Current port        : $ACTIVE_PORT"
+
           echo
           echo "Target environment  : $TARGET_ENV"
           echo "Target container    : $TARGET_CONTAINER"
@@ -270,7 +325,7 @@ jobs:
           docker pull "$IMAGE"
 
           # ------------------------------------------------------
-          # Remove stale target container if present
+          # Remove stale target container
           # ------------------------------------------------------
 
           echo
@@ -297,7 +352,7 @@ jobs:
             "$IMAGE"
 
           # ------------------------------------------------------
-          # Wait for container to become healthy
+          # Wait for container health
           # ------------------------------------------------------
 
           echo
@@ -306,6 +361,7 @@ jobs:
           HEALTH_OK="false"
 
           for attempt in {1..30}; do
+
             if curl \
               --fail \
               --silent \
@@ -318,19 +374,26 @@ jobs:
 
                 HEALTH_OK="true"
                 break
+
               fi
+
             fi
 
             echo "Health check attempt ${attempt}/30 failed."
             sleep 2
+
           done
 
           if [[ "$HEALTH_OK" != "true" ]]; then
+
             echo
             echo "ERROR: New environment failed health check."
+
             echo
             cat /tmp/ixitek-health.json 2>/dev/null || true
+
             echo
+            echo "Container logs:"
             docker logs --tail 100 "$TARGET_CONTAINER" || true
 
             echo
@@ -339,6 +402,7 @@ jobs:
             docker rm -f "$TARGET_CONTAINER" || true
 
             exit 1
+
           fi
 
           echo
@@ -346,7 +410,7 @@ jobs:
           cat /tmp/ixitek-health.json
 
           # ------------------------------------------------------
-          # Verify Docker container is actually running
+          # Verify Docker container
           # ------------------------------------------------------
 
           echo
@@ -357,14 +421,19 @@ jobs:
             "$TARGET_CONTAINER"
 
           if [[ "$(docker inspect --format='{{.State.Running}}' "$TARGET_CONTAINER")" != "true" ]]; then
+
             echo "ERROR: New container is not running."
+
             docker logs --tail 100 "$TARGET_CONTAINER" || true
+
             docker rm -f "$TARGET_CONTAINER" || true
+
             exit 1
+
           fi
 
           # ------------------------------------------------------
-          # Validate Nginx configuration BEFORE traffic switch
+          # Validate Nginx before traffic switch
           # ------------------------------------------------------
 
           echo
@@ -385,12 +454,14 @@ jobs:
             /etc/nginx/conf.d/ixitek-upstream.conf
 
           # ------------------------------------------------------
-          # Validate configuration after modification
+          # Validate Nginx after modification
           # ------------------------------------------------------
 
           if ! sudo nginx -t; then
+
             echo
             echo "ERROR: Nginx configuration failed."
+
             echo "Restoring previous upstream..."
 
             sudo sed -i \
@@ -403,6 +474,7 @@ jobs:
             docker rm -f "$TARGET_CONTAINER" || true
 
             exit 1
+
           fi
 
           # ------------------------------------------------------
@@ -412,7 +484,7 @@ jobs:
           sudo systemctl reload nginx
 
           # ------------------------------------------------------
-          # POST-DEPLOYMENT PUBLIC SMOKE TEST
+          # Public smoke test
           # ------------------------------------------------------
 
           echo
@@ -421,6 +493,7 @@ jobs:
           PUBLIC_OK="false"
 
           for attempt in {1..15}; do
+
             if curl \
               --fail \
               --silent \
@@ -434,11 +507,14 @@ jobs:
 
                 PUBLIC_OK="true"
                 break
+
               fi
+
             fi
 
             echo "Public smoke test attempt ${attempt}/15 failed."
             sleep 2
+
           done
 
           # ------------------------------------------------------
@@ -463,7 +539,7 @@ jobs:
             cat /tmp/ixitek-public-health.json
 
             # --------------------------------------------------
-            # Remove previous blue/green environment
+            # Remove previous environment
             # --------------------------------------------------
 
             echo
@@ -472,14 +548,16 @@ jobs:
             docker rm -f "$ACTIVE_CONTAINER" 2>/dev/null || true
 
             # --------------------------------------------------
-            # Remove old legacy ixitek-app container
+            # Remove legacy container
             # --------------------------------------------------
 
             if [[ "$ACTIVE_CONTAINER" != "ixitek-app" ]]; then
+
               echo
               echo "Removing legacy ixitek-app container..."
 
               docker rm -f ixitek-app 2>/dev/null || true
+
             fi
 
             # --------------------------------------------------
@@ -495,6 +573,7 @@ jobs:
             echo "Deployment completed successfully."
 
             exit 0
+
           fi
 
           # ------------------------------------------------------
@@ -521,7 +600,7 @@ jobs:
           docker logs --tail 150 "$TARGET_CONTAINER" || true
 
           # ------------------------------------------------------
-          # Restore previous Nginx upstream
+          # Restore previous upstream
           # ------------------------------------------------------
 
           echo
@@ -545,6 +624,7 @@ jobs:
           ROLLBACK_OK="false"
 
           for attempt in {1..15}; do
+
             if curl \
               --fail \
               --silent \
@@ -558,14 +638,18 @@ jobs:
 
                 ROLLBACK_OK="true"
                 break
+
               fi
+
             fi
 
             echo "Rollback verification attempt ${attempt}/15 failed."
             sleep 2
+
           done
 
           if [[ "$ROLLBACK_OK" == "true" ]]; then
+
             echo
             echo "========================================"
             echo "ROLLBACK SUCCESSFUL"
@@ -586,6 +670,7 @@ jobs:
             docker rm -f "$TARGET_CONTAINER" || true
 
             exit 1
+
           fi
 
           echo
@@ -599,3 +684,181 @@ jobs:
           exit 2
 
           REMOTE_SCRIPT
+
+          # Replace only the image placeholder.
+          # No GitHub secret is placed in this script.
+          python3 - <<PY
+          from pathlib import Path
+
+          path = Path("/tmp/ixitek-deploy.sh")
+          content = path.read_text()
+
+          content = content.replace(
+              "__IXITEK_IMAGE__",
+              "${IMAGE}"
+          )
+
+          path.write_text(content)
+          PY
+
+          chmod 700 /tmp/ixitek-deploy.sh
+
+      # --------------------------------------------------------
+      # Send deployment script through SSM
+      # --------------------------------------------------------
+
+      - name: Send deployment command to EC2
+        env:
+          INSTANCE_ID: ${{ env.EC2_INSTANCE_ID }}
+        run: |
+
+          set -Eeuo pipefail
+
+          echo "Encoding deployment script..."
+
+          SCRIPT_B64="$(base64 -w 0 /tmp/ixitek-deploy.sh)"
+
+          COMMAND_JSON="$(
+            python3 - "$SCRIPT_B64" <<'PY'
+          import json
+          import sys
+
+          script_b64 = sys.argv[1]
+
+          commands = [
+              "echo '" + script_b64 + "' | base64 -d > /tmp/ixitek-deploy.sh",
+              "chmod 700 /tmp/ixitek-deploy.sh",
+              "bash /tmp/ixitek-deploy.sh"
+          ]
+
+          print(json.dumps({"commands": commands}))
+          PY
+          )"
+
+          echo "Sending command through AWS Systems Manager..."
+
+          COMMAND_ID="$(
+            aws ssm send-command \
+              --region "$AWS_REGION" \
+              --instance-ids "$INSTANCE_ID" \
+              --document-name "AWS-RunShellScript" \
+              --parameters "$COMMAND_JSON" \
+              --comment "Ixitek production deployment $GITHUB_SHA" \
+              --query "Command.CommandId" \
+              --output text
+          )"
+
+          echo
+          echo "SSM Command ID:"
+          echo "$COMMAND_ID"
+
+          echo "$COMMAND_ID" > /tmp/ixitek-command-id
+
+      # --------------------------------------------------------
+      # Wait for deployment result
+      # --------------------------------------------------------
+
+      - name: Wait for deployment
+        env:
+          INSTANCE_ID: ${{ env.EC2_INSTANCE_ID }}
+        run: |
+
+          set -Eeuo pipefail
+
+          COMMAND_ID="$(cat /tmp/ixitek-command-id)"
+
+          echo
+          echo "Waiting for EC2 deployment..."
+
+          for attempt in {1..120}; do
+
+            STATUS="$(
+              aws ssm get-command-invocation \
+                --region "$AWS_REGION" \
+                --command-id "$COMMAND_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --query "Status" \
+                --output text 2>/dev/null || true
+            )"
+
+            echo "SSM status ${attempt}/120: $STATUS"
+
+            case "$STATUS" in
+
+              Success)
+
+                echo
+                echo "========================================"
+                echo "DEPLOYMENT SUCCESSFUL"
+                echo "========================================"
+
+                echo
+                echo "EC2 deployment output:"
+
+                aws ssm get-command-invocation \
+                  --region "$AWS_REGION" \
+                  --command-id "$COMMAND_ID" \
+                  --instance-id "$INSTANCE_ID" \
+                  --query "StandardOutputContent" \
+                  --output text
+
+                exit 0
+                ;;
+
+              Failed|TimedOut|Cancelled|Cancelling|Undeliverable|Terminated)
+
+                echo
+                echo "========================================"
+                echo "DEPLOYMENT FAILED"
+                echo "========================================"
+
+                echo
+                echo "Final status:"
+                echo "$STATUS"
+
+                echo
+                echo "Standard output:"
+
+                aws ssm get-command-invocation \
+                  --region "$AWS_REGION" \
+                  --command-id "$COMMAND_ID" \
+                  --instance-id "$INSTANCE_ID" \
+                  --query "StandardOutputContent" \
+                  --output text || true
+
+                echo
+                echo "Standard error:"
+
+                aws ssm get-command-invocation \
+                  --region "$AWS_REGION" \
+                  --command-id "$COMMAND_ID" \
+                  --instance-id "$INSTANCE_ID" \
+                  --query "StandardErrorContent" \
+                  --output text || true
+
+                exit 1
+                ;;
+
+              Pending|InProgress|"")
+                sleep 5
+                ;;
+
+              *)
+                sleep 5
+                ;;
+
+            esac
+
+          done
+
+          echo
+          echo "ERROR: Timed out waiting for SSM deployment."
+
+          aws ssm get-command-invocation \
+            --region "$AWS_REGION" \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --query "[Status,StatusDetails,StandardOutputContent,StandardErrorContent]" \
+            --output text || true
+
+          exit 1
