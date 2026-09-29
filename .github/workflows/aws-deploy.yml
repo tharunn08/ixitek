@@ -1,0 +1,601 @@
+name: Ixitek Production CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ixitek-production
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: ghcr.io/tharunn08/ixitek
+  EC2_APP_ROOT: /home/ec2-user/ixitek-config
+  EC2_DATA_ROOT: /home/ec2-user/ixitek-data
+  NGINX_UPSTREAM_FILE: /etc/nginx/conf.d/ixitek-upstream.conf
+  NGINX_CONFIG_FILE: /etc/nginx/conf.d/ixitek.conf
+  BLUE_PORT: 5001
+  GREEN_PORT: 5002
+
+jobs:
+  # ============================================================
+  # 1. TEST
+  # ============================================================
+  test:
+    name: Test application
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        db_image:
+          - mysql:8.0
+          - mariadb:10.11
+
+    services:
+      mysql:
+        image: ${{ matrix.db_image }}
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: ixitek_test
+          MYSQL_USER: ixitek
+          MYSQL_PASSWORD: ixitek
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="sh -c
+          'if command -v mysqladmin >/dev/null 2>&1;
+          then mysqladmin ping -h 127.0.0.1 -proot;
+          else healthcheck.sh --connect --innodb_initialized;
+          fi'"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      NODE_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: ixitek
+      DB_PASSWORD: ixitek
+      DB_NAME: ixitek_test
+      DB_NAME_TEST: ixitek_test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ixitek-backend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci --prefix ixitek-backend
+
+      - name: Create restore-test database
+        run: |
+          docker exec \
+            ${{ job.services.mysql.id }} \
+            sh -c '
+              if command -v mysql >/dev/null 2>&1; then
+                M=mysql
+              else
+                M=mariadb
+              fi
+
+              $M -uroot -proot -e "
+                CREATE DATABASE IF NOT EXISTS ixitek_restore_test;
+                GRANT ALL ON ixitek_restore_test.* TO '\''ixitek'\''@'\''%'\'';
+              "
+            '
+
+      - name: Run backend tests
+        run: npm test --prefix ixitek-backend
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix ixitek-frontend --include=dev
+
+      - name: Lint frontend
+        run: npm run lint --prefix ixitek-frontend
+
+      - name: Build frontend
+        run: npm run build --prefix ixitek-frontend
+
+  # ============================================================
+  # 2. BUILD + SECURITY SCAN + PUSH
+  # ============================================================
+  build:
+    name: Build, scan and publish image
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build immutable Docker image
+        run: |
+          docker build \
+            --pull \
+            -t ${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            .
+
+      - name: Scan Docker image for vulnerabilities
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: table
+          exit-code: 1
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+      - name: Push immutable image
+        run: |
+          docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Update latest tag
+        run: |
+          docker tag \
+            ${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            ${{ env.IMAGE_NAME }}:latest
+
+          docker push ${{ env.IMAGE_NAME }}:latest
+
+  # ============================================================
+  # 3. BLUE/GREEN PRODUCTION DEPLOYMENT
+  # ============================================================
+  deploy:
+    name: Blue/Green production deployment
+    runs-on: ubuntu-latest
+    needs: build
+
+    environment:
+      name: production
+      url: https://aws.ixitek.com
+
+    steps:
+      - name: Configure SSH
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+
+      - name: Add EC2 host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+
+          ssh-keyscan -H \
+            "${{ secrets.EC2_HOST }}" \
+            >> ~/.ssh/known_hosts
+
+      - name: Deploy immutable image with blue/green strategy
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          IMAGE: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+        run: |
+          ssh "${EC2_USER}@${EC2_HOST}" \
+            "GHCR_USERNAME='${GHCR_USERNAME}' GHCR_TOKEN='${GHCR_TOKEN}' IMAGE='${IMAGE}' bash -s" <<'REMOTE_SCRIPT'
+
+          set -Eeuo pipefail
+
+          echo "========================================"
+          echo "IXITEK PRODUCTION DEPLOYMENT"
+          echo "========================================"
+
+          echo
+          echo "Image:"
+          echo "$IMAGE"
+
+          # ------------------------------------------------------
+          # Determine currently active environment
+          # ------------------------------------------------------
+
+          CURRENT_PORT="$(sudo awk '
+            /server 127\.0\.0\.1:(5001|5002);/ {
+              sub(/.*server 127\.0\.0\.1:/, "", $0)
+              sub(/;.*/, "", $0)
+              print $0
+              exit
+            }
+          ' /etc/nginx/conf.d/ixitek-upstream.conf)"
+
+          if [[ "$CURRENT_PORT" == "5001" ]]; then
+            ACTIVE_ENV="blue"
+            ACTIVE_CONTAINER="ixitek-blue"
+            ACTIVE_PORT="5001"
+
+            TARGET_ENV="green"
+            TARGET_CONTAINER="ixitek-green"
+            TARGET_PORT="5002"
+
+          elif [[ "$CURRENT_PORT" == "5002" ]]; then
+            ACTIVE_ENV="green"
+            ACTIVE_CONTAINER="ixitek-green"
+            ACTIVE_PORT="5002"
+
+            TARGET_ENV="blue"
+            TARGET_CONTAINER="ixitek-blue"
+            TARGET_PORT="5001"
+
+          else
+            echo "ERROR: Unknown active port: $CURRENT_PORT"
+            exit 1
+          fi
+
+          echo
+          echo "Current environment : $ACTIVE_ENV"
+          echo "Current container   : $ACTIVE_CONTAINER"
+          echo "Current port        : $ACTIVE_PORT"
+          echo
+          echo "Target environment  : $TARGET_ENV"
+          echo "Target container    : $TARGET_CONTAINER"
+          echo "Target port         : $TARGET_PORT"
+
+          # ------------------------------------------------------
+          # Login to GHCR
+          # ------------------------------------------------------
+
+          echo
+          echo "Logging into GHCR..."
+
+          echo "$GHCR_TOKEN" | docker login ghcr.io \
+            --username "$GHCR_USERNAME" \
+            --password-stdin
+
+          # ------------------------------------------------------
+          # Pull exact immutable image
+          # ------------------------------------------------------
+
+          echo
+          echo "Pulling immutable image..."
+
+          docker pull "$IMAGE"
+
+          # ------------------------------------------------------
+          # Remove stale target container if present
+          # ------------------------------------------------------
+
+          echo
+          echo "Cleaning stale target container..."
+
+          docker rm -f "$TARGET_CONTAINER" 2>/dev/null || true
+
+          # ------------------------------------------------------
+          # Start new environment
+          # ------------------------------------------------------
+
+          echo
+          echo "Starting $TARGET_ENV environment..."
+
+          docker run -d \
+            --name "$TARGET_CONTAINER" \
+            --restart unless-stopped \
+            -p "${TARGET_PORT}:5000" \
+            --env-file /home/ec2-user/ixitek-config/.env \
+            -v /home/ec2-user/ixitek-config/global-bundle.pem:/app/rds-global-bundle.pem:ro \
+            -v /home/ec2-user/ixitek-data:/home/ec2-user/ixitek-data \
+            -e DB_SSL_CA=/app/rds-global-bundle.pem \
+            -e EMAIL_PROVIDER=none \
+            "$IMAGE"
+
+          # ------------------------------------------------------
+          # Wait for container to become healthy
+          # ------------------------------------------------------
+
+          echo
+          echo "Waiting for new container..."
+
+          HEALTH_OK="false"
+
+          for attempt in {1..30}; do
+            if curl \
+              --fail \
+              --silent \
+              --show-error \
+              "http://127.0.0.1:${TARGET_PORT}/api/health" \
+              > /tmp/ixitek-health.json; then
+
+              if grep -q '"ok":true' /tmp/ixitek-health.json && \
+                 grep -q '"db":"up"' /tmp/ixitek-health.json; then
+
+                HEALTH_OK="true"
+                break
+              fi
+            fi
+
+            echo "Health check attempt ${attempt}/30 failed."
+            sleep 2
+          done
+
+          if [[ "$HEALTH_OK" != "true" ]]; then
+            echo
+            echo "ERROR: New environment failed health check."
+            echo
+            cat /tmp/ixitek-health.json 2>/dev/null || true
+            echo
+            docker logs --tail 100 "$TARGET_CONTAINER" || true
+
+            echo
+            echo "Keeping old production environment untouched."
+
+            docker rm -f "$TARGET_CONTAINER" || true
+
+            exit 1
+          fi
+
+          echo
+          echo "New environment health:"
+          cat /tmp/ixitek-health.json
+
+          # ------------------------------------------------------
+          # Verify Docker container is actually running
+          # ------------------------------------------------------
+
+          echo
+          echo "Checking container state..."
+
+          docker inspect \
+            --format='{{.State.Status}}' \
+            "$TARGET_CONTAINER"
+
+          if [[ "$(docker inspect --format='{{.State.Running}}' "$TARGET_CONTAINER")" != "true" ]]; then
+            echo "ERROR: New container is not running."
+            docker logs --tail 100 "$TARGET_CONTAINER" || true
+            docker rm -f "$TARGET_CONTAINER" || true
+            exit 1
+          fi
+
+          # ------------------------------------------------------
+          # Validate Nginx configuration BEFORE traffic switch
+          # ------------------------------------------------------
+
+          echo
+          echo "Validating Nginx configuration..."
+
+          sudo nginx -t
+
+          # ------------------------------------------------------
+          # Switch traffic
+          # ------------------------------------------------------
+
+          echo
+          echo "Switching production traffic:"
+          echo "$ACTIVE_PORT -> $TARGET_PORT"
+
+          sudo sed -i \
+            "s|server 127.0.0.1:${ACTIVE_PORT};|server 127.0.0.1:${TARGET_PORT};|" \
+            /etc/nginx/conf.d/ixitek-upstream.conf
+
+          # ------------------------------------------------------
+          # Validate configuration after modification
+          # ------------------------------------------------------
+
+          if ! sudo nginx -t; then
+            echo
+            echo "ERROR: Nginx configuration failed."
+            echo "Restoring previous upstream..."
+
+            sudo sed -i \
+              "s|server 127.0.0.1:${TARGET_PORT};|server 127.0.0.1:${ACTIVE_PORT};|" \
+              /etc/nginx/conf.d/ixitek-upstream.conf
+
+            sudo nginx -t
+            sudo systemctl reload nginx
+
+            docker rm -f "$TARGET_CONTAINER" || true
+
+            exit 1
+          fi
+
+          # ------------------------------------------------------
+          # Reload Nginx
+          # ------------------------------------------------------
+
+          sudo systemctl reload nginx
+
+          # ------------------------------------------------------
+          # POST-DEPLOYMENT PUBLIC SMOKE TEST
+          # ------------------------------------------------------
+
+          echo
+          echo "Running post-deployment public smoke test..."
+
+          PUBLIC_OK="false"
+
+          for attempt in {1..15}; do
+            if curl \
+              --fail \
+              --silent \
+              --show-error \
+              --max-time 10 \
+              https://aws.ixitek.com/api/health \
+              > /tmp/ixitek-public-health.json; then
+
+              if grep -q '"ok":true' /tmp/ixitek-public-health.json && \
+                 grep -q '"db":"up"' /tmp/ixitek-public-health.json; then
+
+                PUBLIC_OK="true"
+                break
+              fi
+            fi
+
+            echo "Public smoke test attempt ${attempt}/15 failed."
+            sleep 2
+          done
+
+          # ------------------------------------------------------
+          # SUCCESS
+          # ------------------------------------------------------
+
+          if [[ "$PUBLIC_OK" == "true" ]]; then
+
+            echo
+            echo "========================================"
+            echo "DEPLOYMENT SUCCESSFUL"
+            echo "========================================"
+
+            echo
+            echo "Production now serves:"
+            echo "$TARGET_ENV"
+            echo "$TARGET_CONTAINER"
+            echo "$TARGET_PORT"
+
+            echo
+            echo "Public health:"
+            cat /tmp/ixitek-public-health.json
+
+            # --------------------------------------------------
+            # Remove previous blue/green environment
+            # --------------------------------------------------
+
+            echo
+            echo "Removing previous environment..."
+
+            docker rm -f "$ACTIVE_CONTAINER" 2>/dev/null || true
+
+            # --------------------------------------------------
+            # Remove old legacy ixitek-app container
+            # --------------------------------------------------
+
+            if [[ "$ACTIVE_CONTAINER" != "ixitek-app" ]]; then
+              echo
+              echo "Removing legacy ixitek-app container..."
+
+              docker rm -f ixitek-app 2>/dev/null || true
+            fi
+
+            # --------------------------------------------------
+            # Docker cleanup
+            # --------------------------------------------------
+
+            echo
+            echo "Cleaning unused Docker images..."
+
+            docker image prune -af --filter "until=168h" || true
+
+            echo
+            echo "Deployment completed successfully."
+
+            exit 0
+          fi
+
+          # ------------------------------------------------------
+          # AUTOMATIC ROLLBACK
+          # ------------------------------------------------------
+
+          echo
+          echo "========================================"
+          echo "DEPLOYMENT FAILED"
+          echo "STARTING AUTOMATIC ROLLBACK"
+          echo "========================================"
+
+          echo
+          echo "New environment:"
+          echo "$TARGET_CONTAINER"
+          echo "$TARGET_PORT"
+
+          echo
+          echo "Public health response:"
+          cat /tmp/ixitek-public-health.json 2>/dev/null || true
+
+          echo
+          echo "New container logs:"
+          docker logs --tail 150 "$TARGET_CONTAINER" || true
+
+          # ------------------------------------------------------
+          # Restore previous Nginx upstream
+          # ------------------------------------------------------
+
+          echo
+          echo "Restoring traffic:"
+          echo "$TARGET_PORT -> $ACTIVE_PORT"
+
+          sudo sed -i \
+            "s|server 127.0.0.1:${TARGET_PORT};|server 127.0.0.1:${ACTIVE_PORT};|" \
+            /etc/nginx/conf.d/ixitek-upstream.conf
+
+          sudo nginx -t
+          sudo systemctl reload nginx
+
+          # ------------------------------------------------------
+          # Verify rollback
+          # ------------------------------------------------------
+
+          echo
+          echo "Verifying rollback..."
+
+          ROLLBACK_OK="false"
+
+          for attempt in {1..15}; do
+            if curl \
+              --fail \
+              --silent \
+              --show-error \
+              --max-time 10 \
+              https://aws.ixitek.com/api/health \
+              > /tmp/ixitek-rollback-health.json; then
+
+              if grep -q '"ok":true' /tmp/ixitek-rollback-health.json && \
+                 grep -q '"db":"up"' /tmp/ixitek-rollback-health.json; then
+
+                ROLLBACK_OK="true"
+                break
+              fi
+            fi
+
+            echo "Rollback verification attempt ${attempt}/15 failed."
+            sleep 2
+          done
+
+          if [[ "$ROLLBACK_OK" == "true" ]]; then
+            echo
+            echo "========================================"
+            echo "ROLLBACK SUCCESSFUL"
+            echo "========================================"
+
+            echo
+            echo "Old production environment restored:"
+            echo "$ACTIVE_CONTAINER"
+            echo "$ACTIVE_PORT"
+
+            echo
+            echo "Rollback health:"
+            cat /tmp/ixitek-rollback-health.json
+
+            echo
+            echo "Removing failed new environment..."
+
+            docker rm -f "$TARGET_CONTAINER" || true
+
+            exit 1
+          fi
+
+          echo
+          echo "CRITICAL ERROR:"
+          echo "Deployment failed AND rollback verification failed."
+
+          echo
+          echo "DO NOT CLEAN UP ANY MORE CONTAINERS."
+          echo "Manual investigation is required."
+
+          exit 2
+
+          REMOTE_SCRIPT
