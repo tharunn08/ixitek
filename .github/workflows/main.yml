@@ -1,21 +1,55 @@
-name: Test GHCR Authentication
+name: Sync GHCR Credentials to EC2
 
 on:
   workflow_dispatch:
 
 jobs:
-  test-ghcr:
+  sync-ghcr:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ secrets.GHCR_USERNAME }}
-          password: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Test GHCR access
+      - name: Sync GHCR credentials
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
-          echo "GHCR authentication successful"
-          docker logout ghcr.io
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/ixitek-key
+          chmod 600 ~/.ssh/ixitek-key
+
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+          printf 'GHCR_USERNAME=%s\nGHCR_TOKEN=%s\n' \
+            "$GHCR_USERNAME" \
+            "$GHCR_TOKEN" \
+            | base64 -w 0 \
+            | ssh -i ~/.ssh/ixitek-key "$EC2_USER@$EC2_HOST" \
+              'base64 -d > /home/ec2-user/ixitek-config/ghcr.env && chmod 600 /home/ec2-user/ixitek-config/ghcr.env'
+
+      - name: Verify GHCR login on EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          printf '%s\n' "$SSH_KEY" > /tmp/ixitek-key
+          chmod 600 /tmp/ixitek-key
+
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+          ssh -i /tmp/ixitek-key "$EC2_USER@$EC2_HOST" '
+            GHCR_USERNAME=$(sed -n "s/^GHCR_USERNAME=//p" /home/ec2-user/ixitek-config/ghcr.env)
+            GHCR_TOKEN=$(sed -n "s/^GHCR_TOKEN=//p" /home/ec2-user/ixitek-config/ghcr.env)
+
+            printf "%s" "$GHCR_TOKEN" |
+              docker login ghcr.io \
+                --username "$GHCR_USERNAME" \
+                --password-stdin >/dev/null
+
+            docker logout ghcr.io >/dev/null
+
+            echo "GHCR_EC2_LOGIN_OK"
+          '
