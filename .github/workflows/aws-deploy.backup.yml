@@ -9,6 +9,7 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write
 
 concurrency:
   group: ixitek-production
@@ -16,8 +17,12 @@ concurrency:
 
 env:
   IMAGE_NAME: ghcr.io/tharunn08/ixitek
+  EC2_INSTANCE_ID: i-032a55578ef6d0f83
+  AWS_REGION: ap-southeast-2
   EC2_APP_ROOT: /home/ec2-user/ixitek-config
   EC2_DATA_ROOT: /home/ec2-user/ixitek-data
+  NGINX_UPSTREAM_FILE: /etc/nginx/conf.d/ixitek-upstream.conf
+  NGINX_CONFIG_FILE: /etc/nginx/conf.d/ixitek.conf
   BLUE_PORT: 5001
   GREEN_PORT: 5002
 
@@ -124,10 +129,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
 
-    permissions:
-      contents: read
-      packages: write
-
     steps:
 
       - name: Checkout repository
@@ -175,7 +176,7 @@ jobs:
 
   deploy:
     name: Blue/Green production deployment
-    runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
     needs: build
 
     environment:
@@ -185,50 +186,40 @@ jobs:
     permissions:
       contents: read
       packages: read
+      id-token: write
 
     steps:
 
       # --------------------------------------------------------
-      # Checkout
+      # AWS OIDC
       # --------------------------------------------------------
 
-      - name: Checkout repository
-        uses: actions/checkout@v6
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: IxitekProductionDeployment
 
-      # --------------------------------------------------------
-      # Runner verification
-      # --------------------------------------------------------
-
-      - name: Verify production runner
+      - name: Verify AWS identity
         run: |
-          echo "Runner: $RUNNER_NAME"
-          echo "OS: $RUNNER_OS"
-          echo "Architecture: $RUNNER_ARCH"
-          echo "User: $(whoami)"
-          echo "Hostname: $(hostname)"
-          docker --version
+          aws sts get-caller-identity
 
       # --------------------------------------------------------
-      # Login to GHCR using GitHub Actions token
+      # Prepare deployment script
       # --------------------------------------------------------
 
-      - name: Login to GHCR
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io \
-            --username "${{ github.actor }}" \
-            --password-stdin
-
-      # --------------------------------------------------------
-      # Deploy
-      # --------------------------------------------------------
-
-      - name: Blue/Green deployment
+      - name: Create deployment script
         env:
           IMAGE: ${{ env.IMAGE_NAME }}:${{ github.sha }}
-        shell: bash
         run: |
 
+          cat > /tmp/ixitek-deploy.sh <<'REMOTE_SCRIPT'
+          #!/usr/bin/env bash
+
           set -Eeuo pipefail
+
+          IMAGE="__IXITEK_IMAGE__"
 
           echo "========================================"
           echo "IXITEK PRODUCTION DEPLOYMENT"
@@ -237,6 +228,31 @@ jobs:
           echo
           echo "Image:"
           echo "$IMAGE"
+
+          # ------------------------------------------------------
+          # Load GHCR credentials from EC2
+          # ------------------------------------------------------
+
+          GHCR_ENV="/home/ec2-user/ixitek-config/ghcr.env"
+
+          if [[ ! -f "$GHCR_ENV" ]]; then
+            echo "ERROR: GHCR credential file not found:"
+            echo "$GHCR_ENV"
+            exit 1
+          fi
+
+          # shellcheck disable=SC1090
+          source "$GHCR_ENV"
+
+          if [[ -z "${GHCR_USERNAME:-}" ]]; then
+            echo "ERROR: GHCR_USERNAME is missing."
+            exit 1
+          fi
+
+          if [[ -z "${GHCR_TOKEN:-}" ]]; then
+            echo "ERROR: GHCR_TOKEN is missing."
+            exit 1
+          fi
 
           # ------------------------------------------------------
           # Determine currently active environment
@@ -287,6 +303,17 @@ jobs:
           echo "Target environment  : $TARGET_ENV"
           echo "Target container    : $TARGET_CONTAINER"
           echo "Target port         : $TARGET_PORT"
+
+          # ------------------------------------------------------
+          # Login to GHCR
+          # ------------------------------------------------------
+
+          echo
+          echo "Logging into GHCR..."
+
+          echo "$GHCR_TOKEN" | docker login ghcr.io \
+            --username "$GHCR_USERNAME" \
+            --password-stdin
 
           # ------------------------------------------------------
           # Pull exact immutable image
@@ -435,7 +462,6 @@ jobs:
             echo
             echo "ERROR: Nginx configuration failed."
 
-            echo
             echo "Restoring previous upstream..."
 
             sudo sed -i \
@@ -582,7 +608,7 @@ jobs:
           echo "$TARGET_PORT -> $ACTIVE_PORT"
 
           sudo sed -i \
-            "s|server 127\.0\.0\.1:${TARGET_PORT};|server 127.0.0.1:${ACTIVE_PORT};|" \
+            "s|server 127.0.0.1:${TARGET_PORT};|server 127.0.0.1:${ACTIVE_PORT};|" \
             /etc/nginx/conf.d/ixitek-upstream.conf
 
           sudo nginx -t
@@ -656,3 +682,183 @@ jobs:
           echo "Manual investigation is required."
 
           exit 2
+
+          REMOTE_SCRIPT
+
+          # Replace only the image placeholder.
+          # No GitHub secret is placed in this script.
+          python3 - <<PY
+          from pathlib import Path
+
+          path = Path("/tmp/ixitek-deploy.sh")
+          content = path.read_text()
+
+          content = content.replace(
+              "__IXITEK_IMAGE__",
+              "${IMAGE}"
+          )
+
+          path.write_text(content)
+          PY
+
+          chmod 700 /tmp/ixitek-deploy.sh
+
+      # --------------------------------------------------------
+      # Send deployment script through SSM
+      # --------------------------------------------------------
+
+      - name: Send deployment command to EC2
+        env:
+          INSTANCE_ID: ${{ env.EC2_INSTANCE_ID }}
+        run: |
+
+          set -Eeuo pipefail
+
+          echo "Encoding deployment script..."
+
+          SCRIPT_B64="$(base64 -w 0 /tmp/ixitek-deploy.sh)"
+
+          COMMAND_JSON="$(
+            python3 - "$SCRIPT_B64" <<'PY'
+          import json
+          import sys
+
+          script_b64 = sys.argv[1]
+
+          commands = [
+              "echo '" + script_b64 + "' | base64 -d > /tmp/ixitek-deploy.sh",
+              "chmod 700 /tmp/ixitek-deploy.sh",
+              "bash /tmp/ixitek-deploy.sh"
+          ]
+
+          print(json.dumps({"commands": commands}))
+          PY
+          )"
+
+          echo "Sending command through AWS Systems Manager..."
+
+          COMMAND_ID="$(
+            aws ssm send-command \
+              --region "$AWS_REGION" \
+              --instance-ids "$INSTANCE_ID" \
+              --document-name "AWS-RunShellScript" \
+              --parameters "$COMMAND_JSON" \
+              --comment "Ixitek production deployment $GITHUB_SHA" \
+              --query "Command.CommandId" \
+              --output text
+          )"
+
+          echo
+          echo "SSM Command ID:"
+          echo "$COMMAND_ID"
+
+          echo "$COMMAND_ID" > /tmp/ixitek-command-id
+
+      # --------------------------------------------------------
+      # Wait for deployment result
+      # --------------------------------------------------------
+
+      - name: Wait for deployment
+        env:
+          INSTANCE_ID: ${{ env.EC2_INSTANCE_ID }}
+        run: |
+
+          set -Eeuo pipefail
+
+          COMMAND_ID="$(cat /tmp/ixitek-command-id)"
+
+          echo
+          echo "Waiting for EC2 deployment..."
+
+          for attempt in {1..120}; do
+
+            STATUS="$(
+              aws ssm get-command-invocation \
+                --region "$AWS_REGION" \
+                --command-id "$COMMAND_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --query "Status" \
+                --output text 2>/dev/null || true
+            )"
+
+            echo "SSM status ${attempt}/120: $STATUS"
+
+            case "$STATUS" in
+
+              Success)
+
+                echo
+                echo "========================================"
+                echo "DEPLOYMENT SUCCESSFUL"
+                echo "========================================"
+
+                echo
+                echo "EC2 deployment output:"
+
+                aws ssm get-command-invocation \
+                  --region "$AWS_REGION" \
+                  --command-id "$COMMAND_ID" \
+                  --instance-id "$INSTANCE_ID" \
+                  --query "StandardOutputContent" \
+                  --output text
+
+                exit 0
+                ;;
+
+              Failed|TimedOut|Cancelled|Cancelling|Undeliverable|Terminated)
+
+                echo
+                echo "========================================"
+                echo "DEPLOYMENT FAILED"
+                echo "========================================"
+
+                echo
+                echo "Final status:"
+                echo "$STATUS"
+
+                echo
+                echo "Standard output:"
+
+                aws ssm get-command-invocation \
+                  --region "$AWS_REGION" \
+                  --command-id "$COMMAND_ID" \
+                  --instance-id "$INSTANCE_ID" \
+                  --query "StandardOutputContent" \
+                  --output text || true
+
+                echo
+                echo "Standard error:"
+
+                aws ssm get-command-invocation \
+                  --region "$AWS_REGION" \
+                  --command-id "$COMMAND_ID" \
+                  --instance-id "$INSTANCE_ID" \
+                  --query "StandardErrorContent" \
+                  --output text || true
+
+                exit 1
+                ;;
+
+              Pending|InProgress|"")
+                sleep 5
+                ;;
+
+              *)
+                sleep 5
+                ;;
+
+            esac
+
+          done
+
+          echo
+          echo "ERROR: Timed out waiting for SSM deployment."
+
+          aws ssm get-command-invocation \
+            --region "$AWS_REGION" \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --query "[Status,StatusDetails,StandardOutputContent,StandardErrorContent]" \
+            --output text || true
+
+          exit 1
