@@ -1,0 +1,27 @@
+name: Self Hosted Runner Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-runner:
+    runs-on: [self-hosted, linux, x64]
+
+    steps:
+      - name: Runner information
+        run: |
+          echo "Runner: $RUNNER_NAME"
+          echo "OS: $RUNNER_OS"
+          echo "Architecture: $RUNNER_ARCH"
+          echo "User: $(whoami)"
+          echo "Hostname: $(hostname)"
+
+      - name: Check Docker
+        run: |
+          docker --version
+          docker ps
+
+      - name: Check workspace
+        run: |
+          pwd
+          ls -la
